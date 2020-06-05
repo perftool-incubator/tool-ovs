@@ -1,0 +1,62 @@
+{
+    "workshop": {
+        "schema": {
+            "version": "2020.03.02"
+        }
+    },
+    "userenvs": [
+        {
+            "name": "default",
+            "requirements": [ "libtool", "automake", "autoconf", "ovs_src" ]
+        }
+    ],
+    "requirements": [
+        {
+            "name": "libtool",
+            "type": "distro",
+            "distro_info": {
+                "packages": [
+                    "libtool"
+                ]
+            }
+        },
+        {
+            "name": "automake",
+            "type": "distro",
+            "distro_info": {
+                "packages": [
+                    "automake"
+                ]
+            }
+        },
+        {
+            "name": "autoconf",
+            "type": "distro",
+            "distro_info": {
+                "packages": [
+                    "autoconf"
+                ]
+            }
+        },
+        {
+            "name": "ovs_src",
+            "type": "source",
+            "source_info": {
+                "url": "https://github.com/openvswitch/ovs/archive/v2.13.0.tar.gz",
+                "filename": "v2.13.0.tar.gz",
+                "commands": {
+                    "unpack": "tar -zxf v2.13.0.tar.gz",
+                    "get_dir": "tar -ztf v2.13.0.tar.gz | head -n 1",
+                    "commands": [
+                        "./boot.sh",
+                        "./configure",
+                        "make -j16",
+                        "make install-binPROGRAMS",
+                        "ldconfig",
+                        "make clean"
+                    ]
+                }
+            }
+        }
+    ]
+}

@@ -1,0 +1,55 @@
+#!/bin/bash
+exec >ovs-start-stderrout.txt
+exec 2>&1
+
+echo "args: $@"
+echo
+echo "pwd: `/bin/pwd`"
+echo
+echo "hostname: `hostname`"
+echo
+echo "/var/run:"
+/bin/ls -l /var/run
+echo
+# defaults
+interval=3
+ovs_collect="/usr/bin/ovs-collect"
+
+longopts="interval:"
+opts=$(getopt -q -o "" --longoptions "$longopts" -n "getopt.sh" -- "$@");
+if [ $? -ne 0 ]; then
+    printf -- "\tUnrecognized option specified\n\n"
+    exit 1
+fi
+eval set -- "$opts";
+while true; do
+    case "$1" in
+        --interval)
+            shift;
+            interval=$1
+            echo "interval=$interval"
+            shift;
+            ;;
+        --)
+            shift;
+            break
+            ;;
+        *)
+            echo "Invalid optioni: $1"
+            exit 1
+    esac
+done
+
+/bin/rm -f ovs-collect-pid.txt
+if [ -e $ovs_collect ]; then
+    $ovs_collect $interval &
+    ovs_collect_pid=$!
+    if [ -z "$ovs_collect_pid" ]; then
+        echo "Could not get ovs-collect PID, exiting"
+        exit 1
+    fi
+    echo "ovs-collect pid is $ovs_collect_pid"
+    echo $ovs_collect_pid >ovs-collect-pid.txt
+else
+    echo "$ovs_collect is not present, exiting"
+fi

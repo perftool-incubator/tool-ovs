@@ -1,2 +1,2 @@
-# tool-ovs
-Tool subproject to help run and post-process OVS &amp; OVN performance data collection
+# ovs
+Scripts to help collect and post-process openvswitch and OVN
