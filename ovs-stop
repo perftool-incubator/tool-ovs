@@ -1,0 +1,24 @@
+#!/bin/bash
+exec >ovs-stop-stderrout.txt
+exec 2>&1
+
+echo "args: $@"
+echo
+echo "hostname: `hostname`"
+echo
+pidfile="ovs-collect-pid.txt"
+
+if [ -e $pidfile ]; then
+    pid=`cat $pidfile`
+    if [ -z "$pid" ]; then
+        echo "PID for ovs-collect ($pidfile) not found"
+        exit 1
+    fi
+    kill -s SIGTERM $pid
+else
+    echo "$pidfile not found"
+    echo "PWD: `/bin/pwd`"
+    echo "LS:"
+    /bin/ls -l
+    exit 1
+fi

@@ -1,0 +1,41 @@
+{
+    "rickshaw-tool": {
+        "schema": {
+            "version": "2020.03.18"
+        }
+    },
+    "tool": "ovs",
+    "controller": {
+        "post-script": "%tool-dir%/ovs-post-process"
+    },
+    "collector": {
+        "files-from-controller": [
+            {
+                "src": "%tool-dir%/ovs-start",
+                "dest": "/usr/bin/"
+            },
+            {
+                "src": "%tool-dir%/ovs-collect",
+                "dest": "/usr/bin/"
+            },
+            {
+                "src": "%tool-dir%/ovs-stop",
+                "dest": "/usr/bin/"
+            }
+        ],
+        "blacklist": [
+            {
+                "endpoint": "k8s",
+                "collector-types": [ "client", "server" ]
+            }
+        ],
+        "whitelist": [
+            {
+                "endpoint": "k8s",
+                "collector-types": [ "master", "worker" ]
+            }
+        ],
+        "start": "ovs-start",
+        "stop": "ovs-stop"
+      }
+}
