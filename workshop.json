@@ -7,37 +7,10 @@
     "userenvs": [
         {
             "name": "default",
-            "requirements": [ "libtool", "automake", "autoconf", "ovs_src" ]
+            "requirements": [ "ovs_src" ]
         }
     ],
     "requirements": [
-        {
-            "name": "libtool",
-            "type": "distro",
-            "distro_info": {
-                "packages": [
-                    "libtool"
-                ]
-            }
-        },
-        {
-            "name": "automake",
-            "type": "distro",
-            "distro_info": {
-                "packages": [
-                    "automake"
-                ]
-            }
-        },
-        {
-            "name": "autoconf",
-            "type": "distro",
-            "distro_info": {
-                "packages": [
-                    "autoconf"
-                ]
-            }
-        },
         {
             "name": "ovs_src",
             "type": "source",

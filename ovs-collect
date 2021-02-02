@@ -1,44 +1,48 @@
 #!/bin/bash
 
 interval=$1; shift
-
+ovs_dir="/var/run/openvswitch"
 re='^[1-9][0-9]*$'
 if [[ ! "$interval" =~ $re ]]; then
     echo "Interval must a be a positive interger, exiting"
     exit 1
 fi
 
-declare -A cmd_opts
-cmd_opts["ovs-vsctl"]="show"
-cmd_opts["ovs-ofctl"]="show"
+if [ -e $ovs_dir ]; then
+    declare -A cmd_opts
+    cmd_opts["ovs-vsctl"]="show"
+    cmd_opts["ovs-ofctl"]="show"
 
-for cmd in ${!cmd_opts[@]}; do
-    echo "cmd: $cmd"
-    ver=`$cmd --version`
-    rc=$?
-    if [ $rc -gt 0 ]; then
-        echo "Could not run $cmd"
-        exit 1
-    fi
-done
-
-bridges=`ovs-vsctl --db=unix:/var/run/openvswitch/db.sock list-br`
-echo "bridges: $bridges"
-
-echo "/var/run/openvswitch:"
-/bin/ls -l /var/run/oprnevswitch
-echo
-
-while [ 1 -eq 1 ]; do
-    file="ofctl-dump-ports.txt"
-    for bridge in $bridges; do
-        this_date="DATE:`date +%s.%N`"
-        echo >>$file
-        echo $this_date >>$file
-        echo [ovs-ofctl show $bridge] >>$file
-        ovs-ofctl show unix:/var/run/openvswitch/$bridge.mgmt >>$file
-        echo [ovs-ofctl dump-ports $bridge] >>$file
-        ovs-ofctl dump-ports unix:/var/run/openvswitch/$bridge.mgmt >>$file
+    for cmd in ${!cmd_opts[@]}; do
+        echo "cmd: $cmd"
+        ver=`$cmd --version`
+        rc=$?
+        if [ $rc -gt 0 ]; then
+            echo "Could not run $cmd"
+            exit 1
+        fi
     done
-    sleep $interval
-done
+
+    bridges=`ovs-vsctl --db=unix:"$ovs_dir"/db.sock list-br`
+    echo "bridges: $bridges"
+    echo
+    echo "$ovs_dir:"
+    /bin/ls -l "$ovs_dir"
+    echo
+
+    while [ 1 -eq 1 ]; do
+        file="ofctl-dump-ports.txt"
+        for bridge in $bridges; do
+            this_date="DATE:`date +%s.%N`"
+            echo >>$file
+            echo $this_date >>$file
+            echo [ovs-ofctl show $bridge] >>$file
+            ovs-ofctl show unix:"$ovs_dir"/$bridge.mgmt >>$file
+            echo [ovs-ofctl dump-ports $bridge] >>$file
+            ovs-ofctl dump-ports unix:"$ovs_dir"/$bridge.mgmt >>$file
+        done
+        sleep $interval
+    done
+else
+    echo "ERROR: could not find $ovs_dir"
+fi
