@@ -14,11 +14,19 @@ if [ -e $pidfile ]; then
         echo "PID for ovs-collect ($pidfile) not found"
         exit 1
     fi
-    kill -s SIGTERM $pid
+    if [ -e /proc/$pid ]; then
+        kill -s SIGTERM $pid
+    else
+        echo "ERROR: process ID $pid was not found, so ovs-collect may have terminated abnormally"
+    fi
 else
     echo "$pidfile not found"
     echo "PWD: `/bin/pwd`"
     echo "LS:"
     /bin/ls -l
     exit 1
+fi
+if [ -f /usr/bin/xz ]; then
+    echo "Compressing any ovs data files"
+    xz -T 0 ofctl*.txt
 fi

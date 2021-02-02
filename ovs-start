@@ -8,9 +8,6 @@ echo "pwd: `/bin/pwd`"
 echo
 echo "hostname: `hostname`"
 echo
-echo "/var/run:"
-/bin/ls -l /var/run
-echo
 # defaults
 interval=3
 ovs_collect="/usr/bin/ovs-collect"
@@ -35,7 +32,7 @@ while true; do
             break
             ;;
         *)
-            echo "Invalid optioni: $1"
+            echo "Invalid option: $1"
             exit 1
     esac
 done
