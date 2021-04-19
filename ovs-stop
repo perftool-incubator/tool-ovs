@@ -29,4 +29,6 @@ fi
 if [ -f /usr/bin/xz ]; then
     echo "Compressing any ovs data files"
     xz -T 0 ofctl*.txt
+    xz -T 0 dpctl*.txt
+    xz -T 0 conntrack*.txt
 fi

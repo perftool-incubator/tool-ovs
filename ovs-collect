@@ -1,7 +1,10 @@
 #!/bin/bash
+## -*- mode: bash; indent-tabs-mode: t; perl-indent-level: 4 -*-
+## vim: autoindent tabstop=4 shiftwidth=4 expandtab softtabstop=4 filetype=bash
 
 interval=$1; shift
 ovs_dir="/var/run/openvswitch"
+vswitchd_pid=$(pgrep ovs-vswitchd)
 re='^[1-9][0-9]*$'
 if [[ ! "$interval" =~ $re ]]; then
     echo "Interval must a be a positive interger, exiting"
@@ -15,7 +18,7 @@ if [ -e $ovs_dir ]; then
 
     for cmd in ${!cmd_opts[@]}; do
         echo "cmd: $cmd"
-        ver=`$cmd --version`
+        ver=$($cmd --version)
         rc=$?
         if [ $rc -gt 0 ]; then
             echo "Could not run $cmd"
@@ -23,24 +26,46 @@ if [ -e $ovs_dir ]; then
         fi
     done
 
-    bridges=`ovs-vsctl --db=unix:"$ovs_dir"/db.sock list-br`
+    bridges=$(ovs-vsctl --db=unix:"$ovs_dir"/db.sock list-br)
     echo "bridges: $bridges"
     echo
     echo "$ovs_dir:"
     /bin/ls -l "$ovs_dir"
     echo
 
-    while [ 1 -eq 1 ]; do
-        file="ofctl-dump-ports.txt"
+    ports_file="ofctl-dump-ports.txt"
+    conntrack_file="conntrack-stats-show.txt"
+    flows_file="ofctl-dump-flows.txt"
+    coverage_file="dpctl-coverage-show.txt"
+    memory_file="dpctl-memory-show.txt"
+    while true; do
         for bridge in $bridges; do
-            this_date="DATE:`date +%s.%N`"
-            echo >>$file
-            echo $this_date >>$file
-            echo [ovs-ofctl show $bridge] >>$file
-            ovs-ofctl show unix:"$ovs_dir"/$bridge.mgmt >>$file
-            echo [ovs-ofctl dump-ports $bridge] >>$file
-            ovs-ofctl dump-ports unix:"$ovs_dir"/$bridge.mgmt >>$file
+            this_date="DATE:$(date +%s.%N)"
+            echo >>$ports_file
+            echo $this_date >>$ports_file
+            echo [ovs-ofctl show $bridge] >>$ports_file
+            ovs-ofctl show unix:"$ovs_dir"/$bridge.mgmt >>$ports_file
+            echo [ovs-ofctl dump-ports $bridge] >>$ports_file
+            ovs-ofctl dump-ports unix:"$ovs_dir"/$bridge.mgmt >>$ports_file
+            echo $this_date >> $flows_file
+            echo [ovs-ofctl dump-flows $bridge] >> $flows_file
+            ovs-ofctl -O OpenFlow15 dump-flows unix:"$ovs_dir"/$bridge.mgmt >> $flows_file
         done
+        ## Conntrack entries
+        this_date="DATE:$(date +%s.%N)"
+        echo $this_date >> $conntrack_file
+        ovs-appctl --target "$ovs_dir"/ovs-vswitchd.$vswitchd_pid.ctl dpctl/ct-stats-show >> $conntrack_file
+
+        ## Coverage entries
+        this_date="DATE:$(date +%s.%N)"
+        echo $this_date >> $coverage_file
+        ovs-appctl --target "$ovs_dir"/ovs-vswitchd.$vswitchd_pid.ctl coverage/show >> $coverage_file
+
+        ## memory entries
+        this_date="DATE:$(date +%s.%N)"
+        echo $this_date >> $memory_file
+        ovs-appctl --target "$ovs_dir"/ovs-vswitchd.$vswitchd_pid.ctl memory/show >> $memory_file
+
         sleep $interval
     done
 else
