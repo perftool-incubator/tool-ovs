@@ -26,11 +26,11 @@ def main():
     print("ovs-post-process")
     file_name = 'conntrack-stats-show.txt.xz'
     with lzma.open(file_name, 'rt') as file:
-        desc = {'source': 'ovs', 'type': 'connections', 'class': 'protocols'}
-        proto_tcp = {'proto': 'tcp'}
-        proto_udp = {'proto': 'udp'}
-        proto_icmp = {'proto': 'icmp'}
-        proto_other = {'proto': 'other'}
+        desc = {'source': 'ovs', 'type': 'connections', 'class': 'count'}
+        proto_tcp = {'protocol': 'tcp'}
+        proto_udp = {'protocol': 'udp'}
+        proto_icmp = {'protocol': 'icmp'}
+        proto_other = {'protocol': 'other'}
         tcp_sample = {'end': 0, 'value': 0}
         udp_sample = {'end': 0, 'value': 0}
         icmp_sample = {'end': 0, 'value': 0}
