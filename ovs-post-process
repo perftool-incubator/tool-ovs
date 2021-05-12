@@ -35,12 +35,13 @@ def main():
         udp_sample = {'end': 0, 'value': 0}
         icmp_sample = {'end': 0, 'value': 0}
         other_sample = {'end': 0, 'value': 0}
-        file_id = 'ovs'
+        file_id_ovs = 'ovs'
         for line in file:
             if 'DATE' in line:
                 # The date stamp indicates a new sample to log
                 # DATE:1620741229.909499801
-                time_stamp = float(line.split(':')[1])
+                time_stamp_float = float(line.split(':')[1])
+                time_stamp = int(time_stamp_float * 1000)
                 tcp_sample = {'end': time_stamp}
                 udp_sample = {'end': time_stamp}
                 icmp_sample = {'end': time_stamp}
@@ -48,19 +49,19 @@ def main():
             elif 'TCP' in line:
                 # TCP: 2587
                 tcp_sample['value'] = int(line.split(':')[1])
-                log_sample(file_id, desc, proto_tcp, tcp_sample)
+                log_sample(file_id_ovs, desc, proto_tcp, tcp_sample)
             elif 'UDP' in line:
                 # UDP: 74
                 udp_sample['value'] = int(line.split(':')[1])
-                log_sample(file_id, desc, proto_udp, udp_sample)
+                log_sample(file_id_ovs, desc, proto_udp, udp_sample)
             elif 'ICMP' in line:
                 # ICMP: 3
                 icmp_sample['value'] = int(line.split(':')[1])
-                log_sample(file_id, desc, proto_icmp, icmp_sample)
+                log_sample(file_id_ovs, desc, proto_icmp, icmp_sample)
             elif 'Other' in line:
                 # Other: 2
                 other_sample['value'] = int(line.split(':')[1])
-                log_sample(file_id, desc, proto_other, other_sample)
+                log_sample(file_id_ovs, desc, proto_other, other_sample)
             else:
                 continue
 
