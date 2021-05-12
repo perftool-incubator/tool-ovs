@@ -6,7 +6,7 @@
     },
     "tool": "ovs",
     "controller": {
-        "post-script": "%tool-dir%/ovs-post-process"
+        "post-script": "%tool-dir%ovs-post-process"
     },
     "collector": {
         "files-from-controller": [
