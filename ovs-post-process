@@ -26,7 +26,7 @@ def conntrack_post_process(filename):
     # Made for the file conntrack-stats-show.txt.xz
     file_name = filename
     with lzma.open(file_name, 'rt') as file:
-        desc = {'source': 'ovs', 'type': 'connections', 'class': 'count'}
+        desc = {'source': 'ovs', 'type': 'conntrack', 'class': 'count'}
         proto_tcp = {'protocol': 'tcp'}
         proto_udp = {'protocol': 'udp'}
         proto_icmp = {'protocol': 'icmp'}
@@ -35,17 +35,17 @@ def conntrack_post_process(filename):
         udp_sample = {'end': 0, 'value': 0}
         icmp_sample = {'end': 0, 'value': 0}
         other_sample = {'end': 0, 'value': 0}
-        file_id_ovs = 'ovs'
+        file_id_ovs = 'ovs-conntrack'
         for line in file:
             if 'DATE' in line:
                 # The date stamp indicates a new sample to log
                 # DATE:1620741229.909499801
                 time_stamp_float = float(line.split(':')[1])
                 time_stamp = int(time_stamp_float * 1000)
-                tcp_sample = {'end': time_stamp}
-                udp_sample = {'end': time_stamp}
-                icmp_sample = {'end': time_stamp}
-                other_sample = {'end': time_stamp}
+                tcp_sample['end'] = time_stamp
+                udp_sample['end'] = time_stamp
+                icmp_sample['end'] = time_stamp
+                other_sample ['end'] = time_stamp
             elif 'TCP' in line:
                 # TCP: 2587
                 tcp_sample['value'] = int(line.split(':')[1])
@@ -67,11 +67,67 @@ def conntrack_post_process(filename):
 
         finish_samples()
 
+def dpctl_memory_show_process(filename):
+    print('ovs-post-process-dpctl-memory-show')
+    file_name = filename
+    with lzma.open(file_name,'rt') as file:
+        desc = {'source': 'ovs', 'class': 'count', 'type': 'dpctl-mem'}
+        handler = {'source' : 'handlers'}
+        ofconns = {'source' : 'ofconns'}
+        ports = {'source' : 'ports'}
+        revalidators = {'source' : 'revalidators'}
+        rules = {'source' : 'rules'}
+        udpif_keys = {'source' : 'udpif-keys'}
+        handler_smpl = {'end': 0, 'value': 0}
+        ofconns_smpl = {'end': 0, 'value': 0}
+        ports_smpl = {'end': 0, 'value': 0}
+        revalidators_smpl = {'end': 0, 'value': 0}
+        rules_smpl = {'end': 0, 'value': 0}
+        udpif_smpl = {'end': 0, 'value': 0}
+        file_id = 'ovs-memory-show'
+        for line in file:
+            if 'DATE' in line:
+                time_stamp_float = float(line.split(':')[1])
+                time_stamp = int(time_stamp_float * 1000)
+                handler_smpl['end'] = time_stamp
+                ofconns_smpl['end'] = time_stamp
+                ports_smpl['end'] = time_stamp
+                revalidators_smpl['end'] = time_stamp
+                rules_smpl['end'] = time_stamp
+                udpif_smpl['end'] = time_stamp
+            elif 'handlers'in line:
+                # handlers:59 ofconns:2 ports:49 revalidators:21 rules:6664 udpif keys:643
+                data = line.split(' ')
+                handler_smpl['value'] = int(data[0].split(':')[1])
+                ofconns_smpl['value'] = int(data[1].split(':')[1])
+                ports_smpl['value'] = int(data[2].split(':')[1])
+                revalidators_smpl['value'] = int(data[3].split(':')[1])
+                rules_smpl['value'] = int(data[4].split(':')[1])
+                udpif_smpl['value'] = int(data[6].split(':')[1])
+                log_sample(file_id, desc, handler, handler_smpl)
+                log_sample(file_id, desc, ofconns, ofconns_smpl)
+                log_sample(file_id, desc, ports, ports_smpl)
+                log_sample(file_id, desc, revalidators, revalidators_smpl)
+                log_sample(file_id, desc, rules, rules_smpl)
+                log_sample(file_id, desc, udpif_keys, udpif_smpl)
+            else:
+                continue
+
+        finish_samples()
+
+
 def main():
     print("ovs-post-process-multiprocess-launcher")
     conntrack_process = Process(target= conntrack_post_process, args=('conntrack-stats-show.txt.xz',),name = 'conntrack')
     conntrack_process.start()
+    mem_show_process = Process(target = dpctl_memory_show_process, args=('dpctl-memory-show.txt.xz',),name = 'dpctl-show')
+    mem_show_process.start()
+
+
+    # Always join last
     conntrack_process.join()
+    mem_show_process.join()
+    
 
 
 
