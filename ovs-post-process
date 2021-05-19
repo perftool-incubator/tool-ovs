@@ -115,11 +115,78 @@ def dpctl_memory_show_process(filename):
 
         finish_samples()
 
+def ofctl_port_counters(filename):
+    print('ovs-post-process-ofctl-dump-ports')
+    file_name = filename
+    # assume that number of ports per bridge will change during the run
+    # we don't control the coming and going of pods
+    # This function is responsible for calculating the rate of change, This is done with the parsed date stamp
+    pkts_desc = {'source': 'ovs', 'class': 'throughput', 'type': 'packets-sec'}
+    bytes_desc = {'source': 'ovs', 'class': 'throughput', 'type': 'bytes-sec'}
+    prev_bridge_stats = {}
+    prev_date = 0
+    curr_date = 0
+
+    with lzma.open(file_name,'rt') as file:
+        curr_br = ''
+        curr_port = ''
+        for line in file:
+            if 'DATE' in line:
+                s = line.split(':')[1]
+                curr_date = float(s)
+            elif '[ovs-ofctl' in line:
+                # [ovs-ofctl dump-ports br-int]
+                br_name = line.split(' ')[-1].strip(']')
+                curr_br = br_name
+                if br_name in bridges:
+                    # TODO this is probably the spot to trigger the diff calculation
+                    pass
+
+                bridges[br_name] = {}
+            elif 'OFPST_PORT' in line:
+                continue
+            elif 'port' in line:
+                # port_id can be a number or a string, rx_stats is the start of the port counters
+                port_id,rx_stats = line.split(':')
+                # parsing this string:   port "92035bf4585978e"
+                port_id = port_id.split(' ')[-1].strip('"')
+                curr_port = port_id
+                bridges[curr_bridge][curr_port] = {}
+                # rx pkts=105713661, bytes=15600717866, drop=2, errs=0, frame=0, over=0, crc=0
+                rx_stats = rx_stats.split(',')
+                for stat in rx_stats:
+                    key, val = stat.split('=')
+                    if val == '?':
+                        val = 0
+                    if key = 'rx pkts':
+                        key = 'pkts'
+                    key = key.strip()
+                    bridges[curr_bridge][curr_port]['rx_'+ key] = int(val)
+            elif 'tx pkts' in line:
+                tx_stats = line.split(',')
+                for stat in tx_stats:
+                    key, val = stat.split('=')
+                    if val == '?':
+                        val = 0
+                    if key = 'tx pkts':
+                        key = 'pkts'
+                    key = key.strip()
+                    bridges[curr_bridge][curr_port]['tx_'+ key] = int(val)
+            elif 'duration' in line:
+                continue
+
+
+
+
+
+
+
 
 def main():
     print("ovs-post-process-multiprocess-launcher")
     conntrack_process = Process(target= conntrack_post_process, args=('conntrack-stats-show.txt.xz',),name = 'conntrack')
     conntrack_process.start()
+
     mem_show_process = Process(target = dpctl_memory_show_process, args=('dpctl-memory-show.txt.xz',),name = 'dpctl-show')
     mem_show_process.start()
 
