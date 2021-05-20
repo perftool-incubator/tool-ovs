@@ -21,7 +21,7 @@ else:
 from toolbox.metrics import log_sample
 from toolbox.metrics import finish_samples
 
-def conntrack_post_process(filename):
+def conntrack_post_process(filename: str):
     print('ovs-post-process-conntrack')
     # Made for the file conntrack-stats-show.txt.xz
     file_name = filename
@@ -67,7 +67,7 @@ def conntrack_post_process(filename):
 
         finish_samples()
 
-def dpctl_memory_show_process(filename):
+def dpctl_memory_show_process(filename: str):
     print('ovs-post-process-dpctl-memory-show')
     file_name = filename
     with lzma.open(file_name,'rt') as file:
@@ -185,7 +185,7 @@ def compute_and_log_stats(br_name: str,new_br_data:dict, old_br_data:dict):
                 pass
 
 
-def ofctl_port_counters(filename):
+def ofctl_port_counters(filename: str):
     print('ovs-post-process-ofctl-dump-ports')
     # assume that number of ports per bridge will change during the run
     # we don't control the coming and going of pods
