@@ -119,8 +119,42 @@ def dpctl_memory_show_process(filename):
 def compute_and_log_stats(br_name,new_br_data, old_br_data):
     # This function is responsible for calculating the rate of change, This is done with the parsed date stamp
     # rate = (new - old)/time_delta
+    # example of br_data that is being parsed in this function
+    '''
+	{
+		  "timestamp": 1621349568.9893348,
+		  "LOCAL": {
+			"rx_pkts": 2813750994,
+			"rx_bytes": 1575488822034,
+			"rx_drop": 0,
+			"rx_errs": 0,
+			"rx_frame": 0,
+			"rx_over": 0,
+			"rx_crc": 0,
+			"tx_pkts": 2869366564,
+			"tx_bytes": 1832211829840,
+			"tx_drop": 0,
+			"tx_errs": 0,
+			"tx_coll": 0
+		  },
+		  "ens7f0": {
+			"rx_pkts": 3661435731,
+			"rx_bytes": 2013820599332,
+			"rx_drop": 0,
+			"rx_errs": 0,
+			"rx_frame": 0,
+			"rx_over": 0,
+			"rx_crc": 0,
+			"tx_pkts": 3782767418,
+			"tx_bytes": 2312518145390,
+			"tx_drop": 0,
+			"tx_errs": 0,
+			"tx_coll": 0
+		  },
+
+	'''
     file_id = 'ovs-port-counters'
-    desc = {'source': 'ovs', 'class': 'throughput'}
+    log_desc = {'source': 'ovs', 'class': 'throughput'}
     if len(old_br_data.keys()) != len(new_br_data.keys()):
             print("Number of ports changed between measurements on %s" % br_name)
 
@@ -128,15 +162,22 @@ def compute_and_log_stats(br_name,new_br_data, old_br_data):
     for intf_name in new_br_data.keys():
         if 'timestamp' in intf_name:
             continue
-        counter_names = {'bridge' : br_name , 'interface': intf_name}
+        log_names = {'bridge' : br_name , 'interface': intf_name}
         for counter,val in new_br_data[intf_name].items():
+            # e.g. tx_bytes
             direction,name = counter.split('_')
-            counter_names['direction'] = direction
-            desc['type'] = name + '-sec'
+            log_names['direction'] = direction
+            if 'pkts' in name:
+                log_desc['type'] = 'packets-sec'
+            elif 'bytes' in name:
+                log_desc['type'] = 'bytes-sec'
+            else:
+                log_desc['type'] = 'errors-sec'
+
             try:
                 rate = (val - old_br_data[intf_name][counter]) / time_delta
                 sample = {'end': int(new_br_data['timestamp'] * 1000),'value': float(rate)}
-                log_sample(file_id, desc, counter_names,sample)
+                log_sample(file_id, log_desc, log_names, sample)
             except KeyError:
                 # if a port appears, it will be in the new data and not the old
                 # catch the key error, will only happen once per port appearance
