@@ -162,8 +162,8 @@ def compute_and_log_stats(br_name,new_br_data, old_br_data):
     for intf_name in new_br_data.keys():
         if 'timestamp' in intf_name:
             continue
-        log_names = {'bridge' : br_name , 'interface': intf_name}
-        for counter,val in new_br_data[intf_name].items():
+        for counter, val in new_br_data[intf_name].items():
+            log_names = {'bridge' : br_name , 'interface': intf_name}
             # e.g. tx_bytes
             direction,name = counter.split('_')
             log_names['direction'] = direction
@@ -173,6 +173,7 @@ def compute_and_log_stats(br_name,new_br_data, old_br_data):
                 log_desc['type'] = 'bytes-sec'
             else:
                 log_desc['type'] = 'errors-sec'
+                log_names['type'] = name
 
             try:
                 rate = (val - old_br_data[intf_name][counter]) / time_delta
