@@ -114,37 +114,68 @@ def dpctl_memory_show_process(filename):
                 continue
 
         finish_samples()
+def compute_and_log_stats(br_name,new_br_data, old_br_data):
+    # rate = (new - old)/time_delta
+    file_id = 'ovs-counters'
+    desc = {'source': 'ovs', 'class': 'throughput'}
+    new_ports_data = new_br_data.keys()
+    old_ports_data = old_br_data.keys()
+    if len(old_br_data.keys()) != len(new_br_data.keys()):
+            print("Ports changed between measurements on %s" % br_name)
 
+    time_delta = new_br_data['timestamp'] - old_br_data['timestamp']
+    for intf_name in new_br_data.keys():
+        if 'timestamp' in intf_name:
+            continue
+        counter_names = {'bridge' : br_name , 'interface': intf_name}
+        print(intf_name)
+        for counter,val in new_br_data[intf_name].items():
+            direction,name = counter.split('_')
+            counter_names['direction'] = direction
+            desc['type'] = name + '-sec'
+            rate = (val - old_br_data[intf_name][counter]) / time_delta
+            sample = {'end': int(new_br_data['timestamp']* 1000),'value':rate}
+            log_sample(file_id, desc, counter_names,sample)
+
+            
 def ofctl_port_counters(filename):
     print('ovs-post-process-ofctl-dump-ports')
     file_name = filename
     # assume that number of ports per bridge will change during the run
     # we don't control the coming and going of pods
     # This function is responsible for calculating the rate of change, This is done with the parsed date stamp
-    pkts_desc = {'source': 'ovs', 'class': 'throughput', 'type': 'packets-sec'}
-    bytes_desc = {'source': 'ovs', 'class': 'throughput', 'type': 'bytes-sec'}
-    prev_bridge_stats = {}
+    prev_bridges = {}
+    bridges = {}
     prev_date = 0
     curr_date = 0
 
     with lzma.open(file_name,'rt') as file:
-        curr_br = ''
+        curr_bridge = ''
         curr_port = ''
         for line in file:
             if 'DATE' in line:
                 s = line.split(':')[1]
                 curr_date = float(s)
             elif '[ovs-ofctl' in line:
-                # [ovs-ofctl dump-ports br-int]
-                br_name = line.split(' ')[-1].strip(']')
-                curr_br = br_name
+                # [ovs-ofctl dump-ports br-int]\n
+                br_name = line.split(' ')[-1].strip(']\n')
+                curr_bridge = br_name
+                # We have found a second or subsequent bridge port dump
                 if br_name in bridges:
-                    # TODO this is probably the spot to trigger the diff calculation
-                    pass
-
+                    if br_name not in prev_bridges:
+                        # alias the existing data structure with the prev_bridges data structure
+                        prev_bridges[br_name] = bridges[br_name]
+                    else:
+                        # stats are already there, time to calc and log the stats
+                        compute_and_log_stats(br_name,bridges[br_name], prev_bridges[br_name])
+                        prev_bridges[br_name] = bridges[br_name]
+                        
+                # init the structure with a clean dictionary
                 bridges[br_name] = {}
+                bridges[br_name]['timestamp'] = curr_date
             elif 'OFPST_PORT' in line:
                 continue
+
             elif 'port' in line:
                 # port_id can be a number or a string, rx_stats is the start of the port counters
                 port_id,rx_stats = line.split(':')
@@ -156,30 +187,29 @@ def ofctl_port_counters(filename):
                 rx_stats = rx_stats.split(',')
                 for stat in rx_stats:
                     key, val = stat.split('=')
-                    if val == '?':
+                    if '?' in val:
                         val = 0
-                    if key = 'rx pkts':
+                    if 'rx pkts' in key:
                         key = 'pkts'
                     key = key.strip()
                     bridges[curr_bridge][curr_port]['rx_'+ key] = int(val)
+
             elif 'tx pkts' in line:
                 tx_stats = line.split(',')
                 for stat in tx_stats:
                     key, val = stat.split('=')
-                    if val == '?':
+                    if '?' in val:
                         val = 0
-                    if key = 'tx pkts':
+                    if 'tx pkts' in key:
                         key = 'pkts'
                     key = key.strip()
                     bridges[curr_bridge][curr_port]['tx_'+ key] = int(val)
+
             elif 'duration' in line:
                 continue
 
-
-
-
-
-
+            else:
+                continue
 
 
 def main():
