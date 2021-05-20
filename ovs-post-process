@@ -114,12 +114,13 @@ def dpctl_memory_show_process(filename):
                 continue
 
         finish_samples()
+
+
 def compute_and_log_stats(br_name,new_br_data, old_br_data):
+    # This function is responsible for calculating the rate of change, This is done with the parsed date stamp
     # rate = (new - old)/time_delta
     file_id = 'ovs-counters'
     desc = {'source': 'ovs', 'class': 'throughput'}
-    new_ports_data = new_br_data.keys()
-    old_ports_data = old_br_data.keys()
     if len(old_br_data.keys()) != len(new_br_data.keys()):
             print("Ports changed between measurements on %s" % br_name)
 
@@ -128,28 +129,30 @@ def compute_and_log_stats(br_name,new_br_data, old_br_data):
         if 'timestamp' in intf_name:
             continue
         counter_names = {'bridge' : br_name , 'interface': intf_name}
-        print(intf_name)
         for counter,val in new_br_data[intf_name].items():
             direction,name = counter.split('_')
             counter_names['direction'] = direction
             desc['type'] = name + '-sec'
-            rate = (val - old_br_data[intf_name][counter]) / time_delta
-            sample = {'end': int(new_br_data['timestamp']* 1000),'value':rate}
-            log_sample(file_id, desc, counter_names,sample)
+            try:
+                rate = (val - old_br_data[intf_name][counter]) / time_delta
+                sample = {'end': int(new_br_data['timestamp'] * 1000),'value': float(rate)}
+                log_sample(file_id, desc, counter_names,sample)
+            except KeyError:
+                # if a port appears, it will be in the new data and not the old
+                # catch the key error, will only happen once per port appearance
+                pass
 
-            
+
 def ofctl_port_counters(filename):
     print('ovs-post-process-ofctl-dump-ports')
-    file_name = filename
     # assume that number of ports per bridge will change during the run
     # we don't control the coming and going of pods
-    # This function is responsible for calculating the rate of change, This is done with the parsed date stamp
     prev_bridges = {}
     bridges = {}
     prev_date = 0
     curr_date = 0
 
-    with lzma.open(file_name,'rt') as file:
+    with lzma.open(filename,'rt') as file:
         curr_bridge = ''
         curr_port = ''
         for line in file:
@@ -169,7 +172,7 @@ def ofctl_port_counters(filename):
                         # stats are already there, time to calc and log the stats
                         compute_and_log_stats(br_name,bridges[br_name], prev_bridges[br_name])
                         prev_bridges[br_name] = bridges[br_name]
-                        
+
                 # init the structure with a clean dictionary
                 bridges[br_name] = {}
                 bridges[br_name]['timestamp'] = curr_date
@@ -211,20 +214,24 @@ def ofctl_port_counters(filename):
             else:
                 continue
 
+    finish_samples()
 
 def main():
     print("ovs-post-process-multiprocess-launcher")
-    conntrack_process = Process(target= conntrack_post_process, args=('conntrack-stats-show.txt.xz',),name = 'conntrack')
+    conntrack_process = Process(target=conntrack_post_process, args=('conntrack-stats-show.txt.xz',),name='conntrack')
     conntrack_process.start()
 
-    mem_show_process = Process(target = dpctl_memory_show_process, args=('dpctl-memory-show.txt.xz',),name = 'dpctl-show')
+    mem_show_process = Process(target=dpctl_memory_show_process, args=('dpctl-memory-show.txt.xz',),name='dpctl-show')
     mem_show_process.start()
 
+    port_counters_process = Process(target=ofctl_port_counters, args=('ofctl-dump-ports.txt.xz',),name='ofctl-dump-ports')
+    port_counters_process.start()
 
     # Always join last
     conntrack_process.join()
     mem_show_process.join()
-    
+    port_counters_process.join()
+
 
 
 
