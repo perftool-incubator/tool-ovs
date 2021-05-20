@@ -119,10 +119,10 @@ def dpctl_memory_show_process(filename):
 def compute_and_log_stats(br_name,new_br_data, old_br_data):
     # This function is responsible for calculating the rate of change, This is done with the parsed date stamp
     # rate = (new - old)/time_delta
-    file_id = 'ovs-counters'
+    file_id = 'ovs-port-counters'
     desc = {'source': 'ovs', 'class': 'throughput'}
     if len(old_br_data.keys()) != len(new_br_data.keys()):
-            print("Ports changed between measurements on %s" % br_name)
+            print("Number of ports changed between measurements on %s" % br_name)
 
     time_delta = new_br_data['timestamp'] - old_br_data['timestamp']
     for intf_name in new_br_data.keys():
