@@ -116,47 +116,47 @@ def dpctl_memory_show_process(filename):
         finish_samples()
 
 
-def compute_and_log_stats(br_name,new_br_data, old_br_data):
+def compute_and_log_stats(br_name: str,new_br_data:dict, old_br_data:dict):
     # This function is responsible for calculating the rate of change, This is done with the parsed date stamp
     # rate = (new - old)/time_delta
     # example of br_data that is being parsed in this function
     '''
-	{
-		  "timestamp": 1621349568.9893348,
-		  "LOCAL": {
-			"rx_pkts": 2813750994,
-			"rx_bytes": 1575488822034,
-			"rx_drop": 0,
-			"rx_errs": 0,
-			"rx_frame": 0,
-			"rx_over": 0,
-			"rx_crc": 0,
-			"tx_pkts": 2869366564,
-			"tx_bytes": 1832211829840,
-			"tx_drop": 0,
-			"tx_errs": 0,
-			"tx_coll": 0
-		  },
-		  "ens7f0": {
-			"rx_pkts": 3661435731,
-			"rx_bytes": 2013820599332,
-			"rx_drop": 0,
-			"rx_errs": 0,
-			"rx_frame": 0,
-			"rx_over": 0,
-			"rx_crc": 0,
-			"tx_pkts": 3782767418,
-			"tx_bytes": 2312518145390,
-			"tx_drop": 0,
-			"tx_errs": 0,
-			"tx_coll": 0
-		  },
+    {
+          "timestamp": 1621349568.9893348,
+          "LOCAL": {
+            "rx_pkts": 2813750994,
+            "rx_bytes": 1575488822034,
+            "rx_drop": 0,
+            "rx_errs": 0,
+            "rx_frame": 0,
+            "rx_over": 0,
+            "rx_crc": 0,
+            "tx_pkts": 2869366564,
+            "tx_bytes": 1832211829840,
+            "tx_drop": 0,
+            "tx_errs": 0,
+            "tx_coll": 0
+          },
+          "ens7f0": {
+            "rx_pkts": 3661435731,
+            "rx_bytes": 2013820599332,
+            "rx_drop": 0,
+            "rx_errs": 0,
+            "rx_frame": 0,
+            "rx_over": 0,
+            "rx_crc": 0,
+            "tx_pkts": 3782767418,
+            "tx_bytes": 2312518145390,
+            "tx_drop": 0,
+            "tx_errs": 0,
+            "tx_coll": 0
+          },
 
-	'''
+    '''
     file_id = 'ovs-port-counters'
     log_desc = {'source': 'ovs', 'class': 'throughput'}
     if len(old_br_data.keys()) != len(new_br_data.keys()):
-            print("Number of ports changed between measurements on %s" % br_name)
+        print("Number of ports changed between measurements on %s" % br_name)
 
     time_delta = new_br_data['timestamp'] - old_br_data['timestamp']
     for intf_name in new_br_data.keys():
@@ -191,7 +191,6 @@ def ofctl_port_counters(filename):
     # we don't control the coming and going of pods
     prev_bridges = {}
     bridges = {}
-    prev_date = 0
     curr_date = 0
 
     with lzma.open(filename,'rt') as file:
@@ -273,8 +272,6 @@ def main():
     conntrack_process.join()
     mem_show_process.join()
     port_counters_process.join()
-
-
 
 
 if __name__ == '__main__':
