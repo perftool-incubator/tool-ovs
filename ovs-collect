@@ -38,17 +38,16 @@ if [ -e $ovs_dir ]; then
     flows_file="ofctl-dump-flows.txt"
     coverage_file="dpctl-coverage-show.txt"
     memory_file="dpctl-memory-show.txt"
+
     while true; do
         for bridge in $bridges; do
             this_date="DATE:$(date +%s.%N)"
             echo >>$ports_file
             echo $this_date >>$ports_file
-            echo [ovs-ofctl show $bridge] >>$ports_file
-            ovs-ofctl show unix:"$ovs_dir"/$bridge.mgmt >>$ports_file
-            echo [ovs-ofctl dump-ports $bridge] >>$ports_file
-            ovs-ofctl dump-ports unix:"$ovs_dir"/$bridge.mgmt >>$ports_file
+            echo "[ovs-ofctl dump-ports $bridge]" >>$ports_file
+            ovs-ofctl -O OpenFlow15 --names dump-ports unix:"$ovs_dir"/$bridge.mgmt >>$ports_file
             echo $this_date >> $flows_file
-            echo [ovs-ofctl dump-flows $bridge] >> $flows_file
+            echo "[ovs-ofctl dump-flows $bridge]" >> $flows_file
             ovs-ofctl -O OpenFlow15 dump-flows unix:"$ovs_dir"/$bridge.mgmt >> $flows_file
         done
         ## Conntrack entries

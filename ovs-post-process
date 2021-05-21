@@ -1,0 +1,280 @@
+#!/usr/bin/env python3
+# -*- mode: python; indent-tabs-mode: t; python-indent-level: 4 -*-
+# vim: autoindent tabstop=4 shiftwidth=4 expandtab softtabstop=4 filetype=python
+import sys
+import os
+import lzma
+from pathlib import Path
+from multiprocessing import Process
+TOOLBOX_HOME = os.environ.get('TOOLBOX_HOME')
+if TOOLBOX_HOME is None:
+    print("This script requires libraries that are provided by the toolbox project.")
+    print("Toolbox can be acquired from https://github.com/perftool-incubator/toolbox and")
+    print("then use 'export TOOLBOX_HOME=/path/to/toolbox' so that it can be located.")
+    exit(1)
+else:
+    p = Path(TOOLBOX_HOME) / 'python'
+    if not p.exists() or not p.is_dir():
+        print("ERROR: <TOOLBOX_HOME>/python ('%s') does not exist!" % (p))
+        exit(2)
+    sys.path.append(str(p))
+from toolbox.metrics import log_sample
+from toolbox.metrics import finish_samples
+
+def conntrack_post_process(filename: str):
+    print('ovs-post-process-conntrack')
+    # Made for the file conntrack-stats-show.txt.xz
+    file_name = filename
+    with lzma.open(file_name, 'rt') as file:
+        desc = {'source': 'ovs', 'type': 'conntrack', 'class': 'count'}
+        proto_tcp = {'protocol': 'tcp'}
+        proto_udp = {'protocol': 'udp'}
+        proto_icmp = {'protocol': 'icmp'}
+        proto_other = {'protocol': 'other'}
+        tcp_sample = {'end': 0, 'value': 0}
+        udp_sample = {'end': 0, 'value': 0}
+        icmp_sample = {'end': 0, 'value': 0}
+        other_sample = {'end': 0, 'value': 0}
+        file_id_ovs = 'ovs-conntrack'
+        for line in file:
+            if 'DATE' in line:
+                # The date stamp indicates a new sample to log
+                # DATE:1620741229.909499801
+                time_stamp_float = float(line.split(':')[1])
+                time_stamp = int(time_stamp_float * 1000)
+                tcp_sample['end'] = time_stamp
+                udp_sample['end'] = time_stamp
+                icmp_sample['end'] = time_stamp
+                other_sample ['end'] = time_stamp
+            elif 'TCP' in line:
+                # TCP: 2587
+                tcp_sample['value'] = int(line.split(':')[1])
+                log_sample(file_id_ovs, desc, proto_tcp, tcp_sample)
+            elif 'UDP' in line:
+                # UDP: 74
+                udp_sample['value'] = int(line.split(':')[1])
+                log_sample(file_id_ovs, desc, proto_udp, udp_sample)
+            elif 'ICMP' in line:
+                # ICMP: 3
+                icmp_sample['value'] = int(line.split(':')[1])
+                log_sample(file_id_ovs, desc, proto_icmp, icmp_sample)
+            elif 'Other' in line:
+                # Other: 2
+                other_sample['value'] = int(line.split(':')[1])
+                log_sample(file_id_ovs, desc, proto_other, other_sample)
+            else:
+                continue
+
+        finish_samples()
+
+def dpctl_memory_show_process(filename: str):
+    print('ovs-post-process-dpctl-memory-show')
+    file_name = filename
+    with lzma.open(file_name,'rt') as file:
+        desc = {'source': 'ovs', 'class': 'count', 'type': 'dpctl-mem'}
+        handler = {'source' : 'handlers'}
+        ofconns = {'source' : 'ofconns'}
+        ports = {'source' : 'ports'}
+        revalidators = {'source' : 'revalidators'}
+        rules = {'source' : 'rules'}
+        udpif_keys = {'source' : 'udpif-keys'}
+        handler_smpl = {'end': 0, 'value': 0}
+        ofconns_smpl = {'end': 0, 'value': 0}
+        ports_smpl = {'end': 0, 'value': 0}
+        revalidators_smpl = {'end': 0, 'value': 0}
+        rules_smpl = {'end': 0, 'value': 0}
+        udpif_smpl = {'end': 0, 'value': 0}
+        file_id = 'ovs-memory-show'
+        for line in file:
+            if 'DATE' in line:
+                time_stamp_float = float(line.split(':')[1])
+                time_stamp = int(time_stamp_float * 1000)
+                handler_smpl['end'] = time_stamp
+                ofconns_smpl['end'] = time_stamp
+                ports_smpl['end'] = time_stamp
+                revalidators_smpl['end'] = time_stamp
+                rules_smpl['end'] = time_stamp
+                udpif_smpl['end'] = time_stamp
+            elif 'handlers'in line:
+                # handlers:59 ofconns:2 ports:49 revalidators:21 rules:6664 udpif keys:643
+                data = line.split(' ')
+                handler_smpl['value'] = int(data[0].split(':')[1])
+                ofconns_smpl['value'] = int(data[1].split(':')[1])
+                ports_smpl['value'] = int(data[2].split(':')[1])
+                revalidators_smpl['value'] = int(data[3].split(':')[1])
+                rules_smpl['value'] = int(data[4].split(':')[1])
+                udpif_smpl['value'] = int(data[6].split(':')[1])
+                log_sample(file_id, desc, handler, handler_smpl)
+                log_sample(file_id, desc, ofconns, ofconns_smpl)
+                log_sample(file_id, desc, ports, ports_smpl)
+                log_sample(file_id, desc, revalidators, revalidators_smpl)
+                log_sample(file_id, desc, rules, rules_smpl)
+                log_sample(file_id, desc, udpif_keys, udpif_smpl)
+            else:
+                continue
+
+        finish_samples()
+
+
+def compute_and_log_stats(br_name: str,new_br_data:dict, old_br_data:dict):
+    # This function is responsible for calculating the rate of change, This is done with the parsed date stamp
+    # rate = (new - old)/time_delta
+    # example of br_data that is being parsed in this function
+    '''
+    {
+          "timestamp": 1621349568.9893348,
+          "LOCAL": {
+            "rx_pkts": 2813750994,
+            "rx_bytes": 1575488822034,
+            "rx_drop": 0,
+            "rx_errs": 0,
+            "rx_frame": 0,
+            "rx_over": 0,
+            "rx_crc": 0,
+            "tx_pkts": 2869366564,
+            "tx_bytes": 1832211829840,
+            "tx_drop": 0,
+            "tx_errs": 0,
+            "tx_coll": 0
+          },
+          "ens7f0": {
+            "rx_pkts": 3661435731,
+            "rx_bytes": 2013820599332,
+            "rx_drop": 0,
+            "rx_errs": 0,
+            "rx_frame": 0,
+            "rx_over": 0,
+            "rx_crc": 0,
+            "tx_pkts": 3782767418,
+            "tx_bytes": 2312518145390,
+            "tx_drop": 0,
+            "tx_errs": 0,
+            "tx_coll": 0
+          },
+    '''
+    file_id = 'ovs-port-counters'
+    log_desc = {'source': 'ovs', 'class': 'throughput'}
+    if len(old_br_data.keys()) != len(new_br_data.keys()):
+        print("Number of ports changed between measurements on %s" % br_name)
+
+    time_delta = new_br_data['timestamp'] - old_br_data['timestamp']
+    for intf_name in new_br_data.keys():
+        if 'timestamp' in intf_name:
+            continue
+        for counter, val in new_br_data[intf_name].items():
+            log_names = {'bridge' : br_name , 'interface': intf_name}
+            # e.g. tx_bytes
+            direction,name = counter.split('_')
+            log_names['direction'] = direction
+            if 'pkts' in name:
+                log_desc['type'] = 'packets-sec'
+            elif 'bytes' in name:
+                log_desc['type'] = 'Gbps'
+            else:
+                log_desc['type'] = 'errors-sec'
+                log_names['type'] = name
+
+            try:
+                rate = (val - old_br_data[intf_name][counter]) / time_delta
+                # unify on Gbps for network transfer
+                if log_desc['type'] == 'Gbps':
+                    rate = rate * 8 * 1_000_000_000
+                sample = {'end': int(new_br_data['timestamp'] * 1000),'value': float(rate)}
+                log_sample(file_id, log_desc, log_names, sample)
+            except KeyError:
+                # if a port appears, it will be in the new data and not the old
+                # catch the key error, will only happen once per port appearance
+                pass
+
+
+def ofctl_port_counters(filename: str):
+    print('ovs-post-process-ofctl-dump-ports')
+    # assume that number of ports per bridge will change during the run
+    # we don't control the coming and going of pods
+    prev_bridges = {}
+    bridges = {}
+    curr_date = 0
+
+    with lzma.open(filename,'rt') as file:
+        curr_bridge = ''
+        curr_port = ''
+        for line in file:
+            if 'DATE' in line:
+                s = line.split(':')[1]
+                curr_date = float(s)
+            elif '[ovs-ofctl' in line:
+                # [ovs-ofctl dump-ports br-int]\n
+                br_name = line.split(' ')[-1].strip(']\n')
+                curr_bridge = br_name
+                # We have found a second or subsequent bridge port dump
+                if br_name in bridges:
+                    if br_name not in prev_bridges:
+                        # alias the existing data structure with the prev_bridges data structure
+                        prev_bridges[br_name] = bridges[br_name]
+                    else:
+                        # stats are already there, time to calc and log the stats
+                        compute_and_log_stats(br_name,bridges[br_name], prev_bridges[br_name])
+                        prev_bridges[br_name] = bridges[br_name]
+
+                # init the structure with a clean dictionary
+                bridges[br_name] = {}
+                bridges[br_name]['timestamp'] = curr_date
+            elif 'OFPST_PORT' in line:
+                continue
+
+            elif 'port' in line:
+                # port_id can be a number or a string, rx_stats is the start of the port counters
+                port_id,rx_stats = line.split(':')
+                # parsing this string:   port "92035bf4585978e"
+                port_id = port_id.split(' ')[-1].strip('"')
+                curr_port = port_id
+                bridges[curr_bridge][curr_port] = {}
+                # rx pkts=105713661, bytes=15600717866, drop=2, errs=0, frame=0, over=0, crc=0
+                rx_stats = rx_stats.split(',')
+                for stat in rx_stats:
+                    key, val = stat.split('=')
+                    if '?' in val:
+                        val = 0
+                    if 'rx pkts' in key:
+                        key = 'pkts'
+                    key = key.strip()
+                    bridges[curr_bridge][curr_port]['rx_'+ key] = int(val)
+
+            elif 'tx pkts' in line:
+                tx_stats = line.split(',')
+                for stat in tx_stats:
+                    key, val = stat.split('=')
+                    if '?' in val:
+                        val = 0
+                    if 'tx pkts' in key:
+                        key = 'pkts'
+                    key = key.strip()
+                    bridges[curr_bridge][curr_port]['tx_'+ key] = int(val)
+
+            elif 'duration' in line:
+                continue
+
+            else:
+                continue
+
+    finish_samples()
+
+def main():
+    print("ovs-post-process-multiprocess-launcher")
+    conntrack_process = Process(target=conntrack_post_process, args=('conntrack-stats-show.txt.xz',),name='conntrack')
+    conntrack_process.start()
+
+    mem_show_process = Process(target=dpctl_memory_show_process, args=('dpctl-memory-show.txt.xz',),name='dpctl-show')
+    mem_show_process.start()
+
+    port_counters_process = Process(target=ofctl_port_counters, args=('ofctl-dump-ports.txt.xz',),name='ofctl-dump-ports')
+    port_counters_process.start()
+
+    # Always join last
+    conntrack_process.join()
+    mem_show_process.join()
+    port_counters_process.join()
+
+
+if __name__ == '__main__':
+    exit(main())
