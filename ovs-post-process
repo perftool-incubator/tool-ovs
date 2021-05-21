@@ -178,7 +178,7 @@ def compute_and_log_stats(br_name: str,new_br_data:dict, old_br_data:dict):
                 rate = (val - old_br_data[intf_name][counter]) / time_delta
                 # unify on Gbps for network transfer
                 if log_desc['type'] == 'Gbps':
-                    rate = rate * 8 * 1_000_000_000
+                    rate = (rate * 8) / 1_000_000_000
                 sample = {'end': int(new_br_data['timestamp'] * 1000),'value': float(rate)}
                 log_sample(file_id, log_desc, log_names, sample)
             except KeyError:
