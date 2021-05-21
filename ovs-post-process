@@ -151,7 +151,6 @@ def compute_and_log_stats(br_name: str,new_br_data:dict, old_br_data:dict):
             "tx_errs": 0,
             "tx_coll": 0
           },
-
     '''
     file_id = 'ovs-port-counters'
     log_desc = {'source': 'ovs', 'class': 'throughput'}
@@ -170,13 +169,16 @@ def compute_and_log_stats(br_name: str,new_br_data:dict, old_br_data:dict):
             if 'pkts' in name:
                 log_desc['type'] = 'packets-sec'
             elif 'bytes' in name:
-                log_desc['type'] = 'bytes-sec'
+                log_desc['type'] = 'Gbps'
             else:
                 log_desc['type'] = 'errors-sec'
                 log_names['type'] = name
 
             try:
                 rate = (val - old_br_data[intf_name][counter]) / time_delta
+                # unify on Gbps for network transfer
+                if log_desc['type'] == 'Gbps':
+                    rate = rate * 8 * 1_000_000_000
                 sample = {'end': int(new_br_data['timestamp'] * 1000),'value': float(rate)}
                 log_sample(file_id, log_desc, log_names, sample)
             except KeyError:
