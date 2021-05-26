@@ -232,7 +232,10 @@ def ofctl_port_counters(filename: str):
                 # rx pkts=105713661, bytes=15600717866, drop=2, errs=0, frame=0, over=0, crc=0
                 rx_stats = rx_stats.split(',')
                 for stat in rx_stats:
-                    key, val = stat.split('=')
+                    try:
+                        key, val = stat.split('=')
+                    except ValueError as e:
+                        print(e,filename,line)
                     if '?' in val:
                         val = 0
                     if 'rx pkts' in key:
