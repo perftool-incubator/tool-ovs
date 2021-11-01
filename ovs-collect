@@ -50,9 +50,13 @@ if [ -e $ovs_dir ]; then
             echo $this_date >> $flows_file
             echo "[ovs-ofctl dump-flows $bridge]" >> $flows_file
             ovs-ofctl -O OpenFlow15 dump-flows unix:"$ovs_dir"/$bridge.mgmt >> $flows_file
-            echo $this_date >> $hw_offload_file
-            ovs-appctl dpctl/dump-flows type=offloaded >> $hw_offload_file
         done
+
+        ## Hardware Offload Flows
+        this_date="DATE:$(date +%s.%N)"
+        echo $this_date >> $hw_offload_file
+        ovs-appctl --target "$ovs_dir"/ovs-vswitchd.$vswitchd_pid.ctl  dpctl/dump-flows type=offloaded >> $hw_offload_file
+
         ## Conntrack entries
         this_date="DATE:$(date +%s.%N)"
         echo $this_date >> $conntrack_file
