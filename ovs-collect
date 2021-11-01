@@ -38,6 +38,7 @@ if [ -e $ovs_dir ]; then
     flows_file="ofctl-dump-flows.txt"
     coverage_file="dpctl-coverage-show.txt"
     memory_file="dpctl-memory-show.txt"
+    hw_offload_file="dpctl-dump-flow-offloaded.txt"
 
     while true; do
         for bridge in $bridges; do
@@ -49,6 +50,8 @@ if [ -e $ovs_dir ]; then
             echo $this_date >> $flows_file
             echo "[ovs-ofctl dump-flows $bridge]" >> $flows_file
             ovs-ofctl -O OpenFlow15 dump-flows unix:"$ovs_dir"/$bridge.mgmt >> $flows_file
+            echo $this_date >> $hw_offload_file
+            ovs-appctl dpctl/dump-flows type=offloaded >> $hw_offload_file
         done
         ## Conntrack entries
         this_date="DATE:$(date +%s.%N)"
