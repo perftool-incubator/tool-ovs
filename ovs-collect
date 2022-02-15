@@ -52,10 +52,12 @@ if [ -e $ovs_dir ]; then
             ovs-ofctl -O OpenFlow15 dump-flows unix:"$ovs_dir"/$bridge.mgmt >> $flows_file
         done
 
-        ## Hardware Offload Flows
+        ## List flows by datapath
+        ## see https://www.openvswitch.org/support/dist-docs/ovs-vswitchd.8.html "DATAPATH FLOW TABLE DEBUGGING COMMANDS"
+        ## The overhead created by this query has not been characterized at this time.
         this_date="DATE:$(date +%s.%N)"
         echo $this_date >> $hw_offload_file
-        ovs-appctl --target "$ovs_dir"/ovs-vswitchd.$vswitchd_pid.ctl  dpctl/dump-flows type=offloaded >> $hw_offload_file
+        ovs-appctl --target "$ovs_dir"/ovs-vswitchd.$vswitchd_pid.ctl  dpctl/dump-flows --more --names type=all >> $hw_offload_file
 
         ## Conntrack entries
         this_date="DATE:$(date +%s.%N)"
