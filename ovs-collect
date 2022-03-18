@@ -38,7 +38,7 @@ if [ -e $ovs_dir ]; then
     flows_file="ofctl-dump-flows.txt"
     coverage_file="dpctl-coverage-show.txt"
     memory_file="dpctl-memory-show.txt"
-    hw_offload_file="dpctl-dump-flow-offloaded.txt"
+    datapath_file="dpctl-dump-datapath.txt"
 
     while true; do
         for bridge in $bridges; do
@@ -56,8 +56,8 @@ if [ -e $ovs_dir ]; then
         ## see https://www.openvswitch.org/support/dist-docs/ovs-vswitchd.8.html "DATAPATH FLOW TABLE DEBUGGING COMMANDS"
         ## The overhead created by this query has not been characterized at this time.
         this_date="DATE:$(date +%s.%N)"
-        echo $this_date >> $hw_offload_file
-        ovs-appctl --target "$ovs_dir"/ovs-vswitchd.$vswitchd_pid.ctl  dpctl/dump-flows --more --names type=all >> $hw_offload_file
+        echo $this_date >> $datapath_file
+        ovs-appctl --target "$ovs_dir"/ovs-vswitchd.$vswitchd_pid.ctl  dpctl/dump-flows --more --names >> $datapath_file
 
         ## Conntrack entries
         this_date="DATE:$(date +%s.%N)"
