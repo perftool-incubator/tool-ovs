@@ -39,6 +39,7 @@ if [ -e $ovs_dir ]; then
     coverage_file="dpctl-coverage-show.txt"
     memory_file="dpctl-memory-show.txt"
     datapath_file="dpctl-dump-datapath.txt"
+    datapath_stats_file="dpctl-datapath-stats.txt"
 
     while true; do
         for bridge in $bridges; do
@@ -63,6 +64,11 @@ if [ -e $ovs_dir ]; then
         this_date="DATE:$(date +%s.%N)"
         echo $this_date >> $conntrack_file
         ovs-appctl --target "$ovs_dir"/ovs-vswitchd.$vswitchd_pid.ctl dpctl/ct-stats-show >> $conntrack_file
+
+        ## Datapath Stats
+        this_date="DATE:$(date +%s.%N)"
+        echo $this_date >> $datapath_stats_file
+        ovs-appctl --target "$ovs_dir"/ovs-vswitchd.$vswitchd_pid.ctl dpctl/show --statistics >> $datapath_stats_file
 
         ## Coverage entries
         this_date="DATE:$(date +%s.%N)"
