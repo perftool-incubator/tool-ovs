@@ -40,6 +40,7 @@ if [ -e $ovs_dir ]; then
     memory_file="dpctl-memory-show.txt"
     datapath_file="dpctl-dump-datapath.txt"
     datapath_stats_file="dpctl-datapath-stats.txt"
+    upcall_file="upcall-stats.txt"
 
     while true; do
         for bridge in $bridges; do
@@ -71,6 +72,9 @@ if [ -e $ovs_dir ]; then
         ovs-appctl --target "$ovs_dir"/ovs-vswitchd.$vswitchd_pid.ctl dpctl/show --statistics >> $datapath_stats_file
 
         ## Coverage entries
+        '''
+        This seems like the developer level coverage counters
+        '''
         this_date="DATE:$(date +%s.%N)"
         echo $this_date >> $coverage_file
         ovs-appctl --target "$ovs_dir"/ovs-vswitchd.$vswitchd_pid.ctl coverage/show >> $coverage_file
@@ -79,6 +83,11 @@ if [ -e $ovs_dir ]; then
         this_date="DATE:$(date +%s.%N)"
         echo $this_date >> $memory_file
         ovs-appctl --target "$ovs_dir"/ovs-vswitchd.$vswitchd_pid.ctl memory/show >> $memory_file
+
+        ## upcall entries
+        this_date="DATE:$(date +%s.%N)"
+        echo $this_date >> $upcall_file
+        ovs-appctl --target "$ovs_dir"/ovs-vswitchd.$vswitchd_pid.ctl upcall/show >> $upcall_file
 
         sleep $interval
     done
