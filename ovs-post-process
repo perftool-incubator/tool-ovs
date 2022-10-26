@@ -27,7 +27,7 @@ def conntrack_post_process(filename: str):
     # Made for the file conntrack-stats-show.txt.xz
     file_name = filename
     with lzma.open(file_name, 'rt') as file:
-        desc = {'source': 'ovs', 'type': 'conntrack', 'class': 'count'}
+        desc = {'source': 'ovs-dpctl', 'type': 'ct-stats-show', 'class': 'count'}
         proto_tcp = {'protocol': 'tcp'}
         proto_udp = {'protocol': 'udp'}
         proto_icmp = {'protocol': 'icmp'}
@@ -72,7 +72,7 @@ def dpctl_memory_show_process(filename: str):
     print('ovs-post-process-dpctl-memory-show')
     file_name = filename
     with lzma.open(file_name,'rt') as file:
-        desc = {'source': 'ovs', 'class': 'count', 'type': 'dpctl-mem'}
+        desc = {'source': 'ovs-appctl', 'class': 'count', 'type': 'mem-show'}
         handler = {'source' : 'handlers'}
         ofconns = {'source' : 'ofconns'}
         ports = {'source' : 'ports'}
@@ -158,7 +158,7 @@ def compute_and_log_stats(br_name: str, new_br_data: dict, old_br_data: dict):
           },
     '''
     file_id = 'ovs-port-counters'
-    log_desc = {'source': 'ovs', 'class': 'throughput'}
+    log_desc = {'source': 'ovs-ofctl', 'class': 'throughput'}
     if len(old_br_data.keys()) != len(new_br_data.keys()):
         print("Number of ports changed between measurements on %s" % br_name)
 
@@ -271,14 +271,14 @@ def ofctl_port_counters(filename: str):
 def dpctl_datapath_stats(filename: str):
     print("ovs-post-process-dpctl-datapath-stats")
     dp_names = []
-    lookups_desc_count = {'source': 'ovs', 'type': 'datapath-lookups-count', 'class': 'count'}
-    masks_desc_count = {'source': 'ovs', 'type': 'datapath-masks-count', 'class': 'count'}
-    cache_desc_count = {'source': 'ovs', 'type': 'datapath-cache-count', 'class': 'count'}
-    flow_desc_count = {'source': 'ovs', 'type': 'datapath-flows-count', 'class': 'count'}
-    lookups_desc_rate = {'source': 'ovs', 'type': 'datapath-lookups-rate', 'class': 'count'}
-    masks_desc_rate = {'source': 'ovs', 'type': 'datapath-masks-rate', 'class': 'count'}
-    cache_desc_rate = {'source': 'ovs', 'type': 'datapath-cache-rate', 'class': 'count'}
-    flow_desc_rate = {'source': 'ovs', 'type': 'datapath-flows-rate', 'class': 'count'}
+    lookups_desc_count = {'source': 'ovs-dpctl', 'type': 'show-stats-lookups-count', 'class': 'count'}
+    masks_desc_count = {'source': 'ovs-dpctl', 'type': 'show-stats-masks-count', 'class': 'count'}
+    cache_desc_count = {'source': 'ovs-dpctl', 'type': 'show-stats-cache-count', 'class': 'count'}
+    flow_desc_count = {'source': 'ovs-dpctl', 'type': 'show-stats-flows-count', 'class': 'count'}
+    lookups_desc_rate = {'source': 'ovs-dpctl', 'type': 'show-stats-lookups-rate', 'class': 'count'}
+    masks_desc_rate = {'source': 'ovs-dpctl', 'type': 'show-stats-masks-rate', 'class': 'count'}
+    cache_desc_rate = {'source': 'ovs-dpctl', 'type': 'show-stats-cache-rate', 'class': 'count'}
+    flow_desc_rate = {'source': 'ovs-dpctl', 'type': 'show-stats-flows-rate', 'class': 'count'}
     file_id = 'dpctl-datapath-stats'
     prev_stamp = 0
     curr_stamp = 0
@@ -406,38 +406,23 @@ def dpctl_datapath_stats(filename: str):
 
 def upcall_stats(filename: str):
     print("ovs-post-process-upcall-stats")
-    upcall_flow_rate = {'source': 'ovs', 'type': 'upcall-flow-rate', 'class': 'count'}
-    upcall_flow_count = {'source': 'ovs', 'type': 'upcall-flow-count', 'class': 'count'}
-    upcall_avg_rate = {'source': 'ovs', 'type': 'upcall-flow-avg-rate', 'class': 'count'}
-    upcall_avg_count = {'source': 'ovs', 'type': 'upcall-flow-avg-count', 'class': 'count'}
-    upcall_max_rate = {'source': 'ovs', 'type': 'upcall-flow-max-rate', 'class': 'count'}
-    upcall_max_count = {'source': 'ovs', 'type': 'upcall-flow-max-count', 'class': 'count'}
-    upcall_limit_rate = {'source': 'ovs', 'type': 'upcall-flow-limit-rate', 'class': 'count'}
-    upcall_limit_count = {'source': 'ovs', 'type': 'upcall-flow-limit-count', 'class': 'count'}
-    upcall_duration_rate = {'source': 'ovs', 'type': 'upcall-flow-dump-duration-ms-rate', 'class': 'count'}
-    upcall_duration_count = {'source': 'ovs', 'type': 'upcall-flow-dump-duration-ms-count', 'class': 'count'}
+    upcall_flow_count = {'source': 'ovs-appctl', 'type': 'upcall-flow', 'class': 'count'}
+    upcall_avg_count = {'source': 'ovs-appctl', 'type': 'upcall-flow-avg', 'class': 'count'}
+    upcall_max_count = {'source': 'ovs-appctl', 'type': 'upcall-flow-max', 'class': 'count'}
+    upcall_limit_count = {'source': 'ovs-appctl', 'type': 'upcall-flow-limit', 'class': 'count'}
+    upcall_duration_count = {'source': 'ovs-appctl', 'type': 'upcall-flow-dump-duration-ms', 'class': 'count'}
     file_id = 'upcall-datapath-stats'
     dp_names = []
-    prev_stamp = 0
-    curr_stamp = 0
-    time_delta = 0
     flow_sample = {'end': 0,'value':0}
-    prev_flow = 0
     avg_sample = {'end': 0,'value':0}
-    prev_avg = 0
     max_sample = {'end': 0,'value':0}
-    prev_max = 0
     limit_sample = {'end': 0,'value':0}
-    prev_limit = 0
     duration_sample = {'end': 0,'value':0}
-    prev_duration = 0
     with lzma.open(filename,'rt') as file:
         for line in file:
             if 'DATE' in line:
-                prev_stamp = curr_stamp
                 s = float(line.split(':')[1])
                 curr_stamp = int(s * 1000)
-                time_delta = curr_stamp - prev_stamp
                 flow_sample['end'] = curr_stamp
                 avg_sample['end'] = curr_stamp
                 max_sample['end'] = curr_stamp
@@ -469,20 +454,6 @@ def upcall_stats(filename: str):
                 log_sample(file_id, upcall_max_count,{'interface':dp_names[-1],'counter':'max'},max_sample)
                 log_sample(file_id, upcall_limit_count,{'interface':dp_names[-1],'counter':'limit'},limit_sample)
 
-                flow_sample['value'] = (curr_flow - prev_flow) / time_delta
-                avg_sample['value'] = (curr_avg - prev_avg) / time_delta
-                max_sample['value'] = (curr_max - prev_max) / time_delta
-                limit_sample['value'] = (curr_limit - prev_limit) / time_delta
-
-                log_sample(file_id, upcall_flow_rate,{'interface':dp_names[-1],'counter':'flow'},flow_sample)
-                log_sample(file_id, upcall_avg_rate,{'interface':dp_names[-1],'counter':'avg'},avg_sample)
-                log_sample(file_id, upcall_max_rate,{'interface':dp_names[-1],'counter':'max'},max_sample)
-                log_sample(file_id, upcall_limit_rate,{'interface':dp_names[-1],'counter':'limit'},limit_sample)
-
-                prev_flow = curr_flow
-                prev_avg = curr_avg
-                prev_max = curr_max
-                prev_limit = curr_limit
 
             elif 'duration' in line:
                 #  dump duration : 10ms
@@ -491,11 +462,6 @@ def upcall_stats(filename: str):
                 curr_duration = int(pairs[:-2])
                 duration_sample['value'] = curr_duration
                 log_sample(file_id, upcall_duration_count,{'interface':dp_names[-1],'counter':'duration'},duration_sample)
-
-                duration_sample['value'] = (curr_duration - prev_duration) / time_delta
-                log_sample(file_id, upcall_duration_rate,{'interface':dp_names[-1],'counter':'duration'},duration_sample)
-                prev_duration = curr_duration
-
 
             elif 'ufid' in line:
                 # use ufid as a per-datapath token
