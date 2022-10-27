@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # -*- mode: python; indent-tabs-mode: nil; python-indent-level: 4 -*-
 # vim: autoindent tabstop=4 shiftwidth=4 expandtab softtabstop=4 filetype=python
+
 import sys
 import os
 import lzma
@@ -26,7 +27,7 @@ def conntrack_post_process(filename: str):
     # Made for the file conntrack-stats-show.txt.xz
     file_name = filename
     with lzma.open(file_name, 'rt') as file:
-        desc = {'source': 'ovs', 'type': 'conntrack', 'class': 'count'}
+        desc = {'source': 'ovs-dpctl', 'type': 'ct-stats-show', 'class': 'count'}
         proto_tcp = {'protocol': 'tcp'}
         proto_udp = {'protocol': 'udp'}
         proto_icmp = {'protocol': 'icmp'}
@@ -45,7 +46,7 @@ def conntrack_post_process(filename: str):
                 tcp_sample['end'] = time_stamp
                 udp_sample['end'] = time_stamp
                 icmp_sample['end'] = time_stamp
-                other_sample ['end'] = time_stamp
+                other_sample['end'] = time_stamp
             elif 'TCP' in line:
                 # TCP: 2587
                 tcp_sample['value'] = int(line.split(':')[1])
@@ -65,13 +66,13 @@ def conntrack_post_process(filename: str):
             else:
                 continue
 
-        finish_samples()
+    finish_samples()
 
 def dpctl_memory_show_process(filename: str):
     print('ovs-post-process-dpctl-memory-show')
     file_name = filename
     with lzma.open(file_name,'rt') as file:
-        desc = {'source': 'ovs', 'class': 'count', 'type': 'dpctl-mem'}
+        desc = {'source': 'ovs-appctl', 'class': 'count', 'type': 'mem-show'}
         handler = {'source' : 'handlers'}
         ofconns = {'source' : 'ofconns'}
         ports = {'source' : 'ports'}
@@ -98,12 +99,16 @@ def dpctl_memory_show_process(filename: str):
             elif 'handlers'in line:
                 # handlers:59 ofconns:2 ports:49 revalidators:21 rules:6664 udpif keys:643
                 data = line.split(' ')
-                handler_smpl['value'] = int(data[0].split(':')[1])
-                ofconns_smpl['value'] = int(data[1].split(':')[1])
-                ports_smpl['value'] = int(data[2].split(':')[1])
-                revalidators_smpl['value'] = int(data[3].split(':')[1])
-                rules_smpl['value'] = int(data[4].split(':')[1])
-                udpif_smpl['value'] = int(data[6].split(':')[1])
+                try:
+                    handler_smpl['value'] = int(data[0].split(':')[1])
+                    ofconns_smpl['value'] = int(data[1].split(':')[1])
+                    ports_smpl['value'] = int(data[2].split(':')[1])
+                    revalidators_smpl['value'] = int(data[3].split(':')[1])
+                    rules_smpl['value'] = int(data[4].split(':')[1])
+                    udpif_smpl['value'] = int(data[7].split(':')[1])
+                except IndexError as e:
+                    print(e,data)
+                    continue
                 log_sample(file_id, desc, handler, handler_smpl)
                 log_sample(file_id, desc, ofconns, ofconns_smpl)
                 log_sample(file_id, desc, ports, ports_smpl)
@@ -113,10 +118,10 @@ def dpctl_memory_show_process(filename: str):
             else:
                 continue
 
-        finish_samples()
+    finish_samples()
 
 
-def compute_and_log_stats(br_name: str,new_br_data:dict, old_br_data:dict):
+def compute_and_log_stats(br_name: str, new_br_data: dict, old_br_data: dict):
     # This function is responsible for calculating the rate of change, This is done with the parsed date stamp
     # rate = (new - old)/time_delta
     # example of br_data that is being parsed in this function
@@ -153,7 +158,7 @@ def compute_and_log_stats(br_name: str,new_br_data:dict, old_br_data:dict):
           },
     '''
     file_id = 'ovs-port-counters'
-    log_desc = {'source': 'ovs', 'class': 'throughput'}
+    log_desc = {'source': 'ovs-ofctl', 'class': 'throughput'}
     if len(old_br_data.keys()) != len(new_br_data.keys()):
         print("Number of ports changed between measurements on %s" % br_name)
 
@@ -262,21 +267,234 @@ def ofctl_port_counters(filename: str):
 
     finish_samples()
 
+
+def dpctl_datapath_stats(filename: str):
+    print("ovs-post-process-dpctl-datapath-stats")
+    dp_names = []
+    lookups_desc_count = {'source': 'ovs-dpctl', 'type': 'show-stats-lookups-count', 'class': 'count'}
+    masks_desc_count = {'source': 'ovs-dpctl', 'type': 'show-stats-masks-count', 'class': 'count'}
+    cache_desc_count = {'source': 'ovs-dpctl', 'type': 'show-stats-cache-count', 'class': 'count'}
+    flow_desc_count = {'source': 'ovs-dpctl', 'type': 'show-stats-flows-count', 'class': 'count'}
+    lookups_desc_rate = {'source': 'ovs-dpctl', 'type': 'show-stats-lookups-rate', 'class': 'count'}
+    masks_desc_rate = {'source': 'ovs-dpctl', 'type': 'show-stats-masks-rate', 'class': 'count'}
+    cache_desc_rate = {'source': 'ovs-dpctl', 'type': 'show-stats-cache-rate', 'class': 'count'}
+    flow_desc_rate = {'source': 'ovs-dpctl', 'type': 'show-stats-flows-rate', 'class': 'count'}
+    file_id = 'dpctl-datapath-stats'
+    prev_stamp = 0
+    curr_stamp = 0
+    time_delta = 0
+    cache_hit_sample = {'end': 0, 'value': 0}
+    prev_cache_hit = 0
+    lookups_hit_sample = {'end': 0, 'value': 0}
+    prev_lookups_hit = 0
+    lookups_miss_sample = {'end': 0, 'value': 0}
+    prev_lookups_miss = 0
+    lookups_lost_sample = {'end': 0, 'value': 0}
+    prev_lookups_lost = 0
+    masks_hit_sample = {'end': 0, 'value': 0}
+    prev_masks_hit = 0
+    masks_total_sample = {'end': 0, 'value': 0}
+    prev_masks_total = 0
+    flows_sample = {'end': 0, 'value': 0}
+    prev_flows = 0
+    with lzma.open(filename,'rt') as file:
+        for line in file:
+            if 'DATE' in line:
+                prev_stamp = curr_stamp
+                s = float(line.split(':')[1])
+                curr_stamp = int(s * 1000)
+                time_delta = curr_stamp - prev_stamp
+                cache_hit_sample['end'] = curr_stamp
+                lookups_hit_sample['end'] = curr_stamp
+                lookups_miss_sample['end'] = curr_stamp
+                lookups_lost_sample['end'] = curr_stamp
+                masks_hit_sample['end'] = curr_stamp
+                masks_total_sample['end'] = curr_stamp
+                flows_sample['end'] = curr_stamp
+            elif '@' in line:
+            # We have found a datapath
+                name = line.split(':')[0]
+                if name not in dp_names:
+                    dp_names.append(name)
+
+            elif 'lookups:' in line:
+                #  lookups: hit:74624770 missed:2867652 lost:0
+                pairs = line[2:].split(' ')
+                curr_lookups_hit = int(pairs[1].split(':')[1])
+                curr_lookups_miss = int(pairs[2].split(':')[1])
+                curr_lookups_lost = int(pairs[3].split(':')[1])
+
+                # Log the count, then the rate, both could be useful
+
+                lookups_hit_sample['value'] = curr_lookups_hit
+                lookups_miss_sample['value'] = curr_lookups_miss
+                lookups_lost_sample['value'] = curr_lookups_lost
+
+                log_sample(file_id, lookups_desc_count, {'interface': dp_names[-1], 'action': 'hit'}, lookups_hit_sample)
+                log_sample(file_id, lookups_desc_count, {'interface': dp_names[-1], 'action': 'miss'}, lookups_miss_sample)
+                log_sample(file_id, lookups_desc_count, {'interface': dp_names[-1], 'action': 'lost'}, lookups_lost_sample)
+
+                lookups_hit_sample['value'] = (curr_lookups_hit - prev_lookups_hit) / time_delta
+                lookups_miss_sample['value'] = (curr_lookups_miss - prev_lookups_miss) / time_delta
+                lookups_lost_sample['value'] = (curr_lookups_lost - prev_lookups_lost) / time_delta
+                prev_lookups_hit = curr_lookups_hit
+                prev_lookups_miss = curr_lookups_miss
+                prev_lookups_lost = curr_lookups_lost
+                log_sample(file_id, lookups_desc_rate, {'interface': dp_names[-1], 'action': 'hit'}, lookups_hit_sample)
+                log_sample(file_id, lookups_desc_rate, {'interface': dp_names[-1], 'action': 'miss'}, lookups_miss_sample)
+                log_sample(file_id, lookups_desc_rate, {'interface': dp_names[-1], 'action': 'lost'}, lookups_lost_sample)
+
+            elif 'flows:' in line:
+                #  flows: 554
+                pairs = line.split(':')
+                curr_flows = int(pairs[1])
+
+                # Log the count, then the rate, both could be useful
+
+                flows_sample['value'] = curr_flows
+                log_sample(file_id, flow_desc_count, {'interface': dp_names[-1], 'counter': 'flows'}, flows_sample)
+
+                flows_sample['value'] = (curr_flows - prev_flows) / time_delta
+                prev_flows = curr_flows
+                log_sample(file_id, flow_desc_rate, {'interface': dp_names[-1], 'counter': 'flows'}, flows_sample)
+
+            elif 'masks:' in line:
+                #  masks: hit:512424506 total:64 hit/pkt:6.61
+                pairs = line[2:].split(' ')
+                curr_masks_hit = int(pairs[1].split(':')[1])
+                curr_masks_total = int(pairs[2].split(':')[1])
+
+                # Log the count, then the rate, both could be useful
+
+                masks_hit_sample['value'] = curr_masks_hit
+                masks_total_sample['value'] = curr_masks_total
+                log_sample(file_id, masks_desc_count, {'interface': dp_names[-1], 'action': 'hit'}, masks_hit_sample)
+                log_sample(file_id, masks_desc_count, {'interface': dp_names[-1], 'action': 'total'}, masks_total_sample)
+
+                masks_hit_sample['value'] = (curr_masks_hit - prev_masks_hit) / time_delta
+                masks_total_sample['value'] = (curr_masks_total - prev_masks_total) / time_delta
+                prev_masks_hit = curr_masks_hit
+                prev_masks_total = curr_masks_total
+                log_sample(file_id, masks_desc_rate, {'interface': dp_names[-1], 'action': 'hit'}, masks_hit_sample)
+                log_sample(file_id, masks_desc_rate, {'interface': dp_names[-1], 'action': 'total'}, masks_total_sample)
+
+            # startswith is slower, but coding around the false positives is uglier
+            elif line.startswith('  cache:'):
+                #  cache: hit:46193519 hit-rate:59.61%
+                pairs = line[2:].split(' ')
+                curr_cache_hit = int(pairs[1].split(':')[1])
+                # Log the count, then the rate, both could be useful
+
+                cache_hit_sample['value'] = curr_cache_hit
+                log_sample(file_id, cache_desc_count, {'interface': dp_names[-1], 'action': 'hit'}, cache_hit_sample)
+
+                cache_hit_sample['value'] = (curr_cache_hit - prev_cache_hit) / time_delta
+                prev_cache_hit = curr_cache_hit
+                log_sample(file_id, cache_desc_rate, {'interface': dp_names[-1], 'action': 'hit'}, cache_hit_sample)
+
+            elif 'port 0' in line:
+                # Use port 0 as token to remove the datapath name from the print
+                # string in case there are multiple datapaths
+                dp_names.pop()
+
+            else:
+                # don't care, keep going
+                continue
+
+
+    finish_samples()
+
+def upcall_stats(filename: str):
+    print("ovs-post-process-upcall-stats")
+    upcall_flow_count = {'source': 'ovs-appctl', 'type': 'upcall-flow', 'class': 'count'}
+    upcall_avg_count = {'source': 'ovs-appctl', 'type': 'upcall-flow-avg', 'class': 'count'}
+    upcall_max_count = {'source': 'ovs-appctl', 'type': 'upcall-flow-max', 'class': 'count'}
+    upcall_limit_count = {'source': 'ovs-appctl', 'type': 'upcall-flow-limit', 'class': 'count'}
+    upcall_duration_count = {'source': 'ovs-appctl', 'type': 'upcall-flow-dump-duration-ms', 'class': 'count'}
+    file_id = 'upcall-datapath-stats'
+    dp_names = []
+    flow_sample = {'end': 0,'value':0}
+    avg_sample = {'end': 0,'value':0}
+    max_sample = {'end': 0,'value':0}
+    limit_sample = {'end': 0,'value':0}
+    duration_sample = {'end': 0,'value':0}
+    with lzma.open(filename,'rt') as file:
+        for line in file:
+            if 'DATE' in line:
+                s = float(line.split(':')[1])
+                curr_stamp = int(s * 1000)
+                flow_sample['end'] = curr_stamp
+                avg_sample['end'] = curr_stamp
+                max_sample['end'] = curr_stamp
+                limit_sample['end'] = curr_stamp
+                duration_sample['end'] = curr_stamp
+            elif '@' in line:
+            # We have found a datapath
+                name = line.split(':')[0]
+                if name not in dp_names:
+                    dp_names.append(name)
+
+            elif 'flows' in line:
+                #  flows         : (current 538) (avg 548) (max 747) (limit 200000)
+                pairs = line.split(':')[1].strip()
+                pairs = pairs.split(') (')
+                curr_flow = int(pairs[0].split(' ')[1])
+                curr_avg = int(pairs[1].split(' ')[1])
+                curr_max = int(pairs[2].split(' ')[1])
+                # remove trailing close paren on numeric limit value
+                curr_limit = int(pairs[3].split(' ')[1].strip(')'))
+
+                flow_sample['value'] = curr_flow
+                avg_sample['value'] = curr_avg
+                max_sample['value'] = curr_max
+                limit_sample['value'] = curr_limit
+
+                log_sample(file_id, upcall_flow_count,{'interface':dp_names[-1],'counter':'flow'},flow_sample)
+                log_sample(file_id, upcall_avg_count,{'interface':dp_names[-1],'counter':'avg'},avg_sample)
+                log_sample(file_id, upcall_max_count,{'interface':dp_names[-1],'counter':'max'},max_sample)
+                log_sample(file_id, upcall_limit_count,{'interface':dp_names[-1],'counter':'limit'},limit_sample)
+
+
+            elif 'duration' in line:
+                #  dump duration : 10ms
+                pairs = line.split(':')[1].strip()
+                # slice 'ms' off the value
+                curr_duration = int(pairs[:-2])
+                duration_sample['value'] = curr_duration
+                log_sample(file_id, upcall_duration_count,{'interface':dp_names[-1],'counter':'duration'},duration_sample)
+
+            elif 'ufid' in line:
+                # use ufid as a per-datapath token
+                dp_names.pop()
+
+            else:
+                continue
+
+    finish_samples()
+
 def main():
     print("ovs-post-process-multiprocess-launcher")
-    conntrack_process = Process(target=conntrack_post_process, args=('conntrack-stats-show.txt.xz',),name='conntrack')
+    conntrack_process = Process(target=conntrack_post_process, args=('conntrack-stats-show.txt.xz',), name='conntrack')
     conntrack_process.start()
 
-    mem_show_process = Process(target=dpctl_memory_show_process, args=('dpctl-memory-show.txt.xz',),name='dpctl-show')
+    mem_show_process = Process(target=dpctl_memory_show_process, args=('dpctl-memory-show.txt.xz',), name='dpctl-show')
     mem_show_process.start()
 
-    port_counters_process = Process(target=ofctl_port_counters, args=('ofctl-dump-ports.txt.xz',),name='ofctl-dump-ports')
+    port_counters_process = Process(target=ofctl_port_counters, args=('ofctl-dump-ports.txt.xz',), name='ofctl-dump-ports')
     port_counters_process.start()
+
+    dpctl_stats_process = Process(target=dpctl_datapath_stats, args=('dpctl-datapath-stats.txt.xz',), name='dpctl-dp-stats')
+    dpctl_stats_process.start()
+
+    upcall_stats_process = Process(target=upcall_stats, args=('upcall-stats.txt.xz',), name='upcall-stats')
+    upcall_stats_process.start()
 
     # Always join last
     conntrack_process.join()
     mem_show_process.join()
     port_counters_process.join()
+    dpctl_stats_process.join()
+    upcall_stats_process.join()
 
 
 if __name__ == '__main__':
