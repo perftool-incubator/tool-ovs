@@ -267,6 +267,55 @@ def ofctl_port_counters(filename: str):
 
     finish_samples()
 
+def extract_inside_parens(paren_str: str) -> str:
+    left = paren_str.find('(')
+    right = paren_str.find(')')
+    if left == -1 or right == -1:
+        return 'err'
+    # slice off left paren
+    left = left + 1
+    return paren_str[left:right]
+
+def dpctl_dump_datapath(filename: str):
+    curr_stamp = 0
+    prev_stamp = 0
+    time_delta = 0
+    ip_proto_lookup_table = {'0': 'NA', '1': 'ICMP',\
+            '2': 'IGMP', '6': 'IGMP', '17': 'UDP', '47': 'GRE'}
+    eth_type_lookup_table = {'0x0800': 'IPv4','0x86DD': 'IPv6',\
+            '0x8808': 'Ethernet Flow Control','0x88CC': 'LLDP','0x0806': 'ARP'}
+
+
+    ufids = {}
+
+    with lzma.open(filename,'rt') as file:
+        for line in file:
+            if 'DATE' in line:
+                s = float(line.split(':')[1])
+                curr_stamp = int(s * 1000)
+            elif 'ufid:' in line:
+                line = line.split(',')
+                # set the ufid in the output as a key for the dict
+                ufid_key = line[1].split(':')[1]
+                if ufid_key not in ufid:
+                    ufid[ufid_key] = {}
+
+                # list comprehensions - search through the array of values for
+                # metrics, returns an array, split that on the ':'
+                # then grab the value ['packets:2'] -> ['packets','2']
+                curr_packet = int([x for x in line if 'packets' in x][0].split(':')[1])
+                curr_byte = int([x for x in line if 'byte' in x][0].split(':')[1])
+                datapath = [x for x in line if 'dp:' in x][0].split(':')[1]
+                in_port = [x for x in line if 'in_port' in x][0]
+                ipv4 = [x for x in line if 'ipv4' in x][0]
+                ufid[ufid_key]['curr_packet_count'] = curr_packet
+                ufid[ufid_key]['curr_byte_count'] = curr_byte
+                ufid[ufid_key]['datapath'] = datapath
+                ufid[ufid_key]['in_port'] = extract_inside_parens(in_port)
+                ip4_match = extract_iniside_parens(ipv4)
+            else:
+                continue
+
 
 def dpctl_datapath_stats(filename: str):
     print("ovs-post-process-dpctl-datapath-stats")
@@ -312,7 +361,7 @@ def dpctl_datapath_stats(filename: str):
                 masks_total_sample['end'] = curr_stamp
                 flows_sample['end'] = curr_stamp
             elif '@' in line:
-            # We have found a datapath
+                # We have found a datapath
                 name = line.split(':')[0]
                 if name not in dp_names:
                     dp_names.append(name)
@@ -379,8 +428,8 @@ def dpctl_datapath_stats(filename: str):
                 log_sample(file_id, masks_desc_rate, {'interface': dp_names[-1], 'action': 'total'}, masks_total_sample)
 
             # startswith is slower, but coding around the false positives is uglier
-            elif line.startswith('  cache:'):
-                #  cache: hit:46193519 hit-rate:59.61%
+        elif line.startswith('  cache:'):
+            #  cache: hit:46193519 hit-rate:59.61%
                 pairs = line[2:].split(' ')
                 curr_cache_hit = int(pairs[1].split(':')[1])
                 # Log the count, then the rate, both could be useful
@@ -429,7 +478,7 @@ def upcall_stats(filename: str):
                 limit_sample['end'] = curr_stamp
                 duration_sample['end'] = curr_stamp
             elif '@' in line:
-            # We have found a datapath
+                # We have found a datapath
                 name = line.split(':')[0]
                 if name not in dp_names:
                     dp_names.append(name)
@@ -489,12 +538,16 @@ def main():
     upcall_stats_process = Process(target=upcall_stats, args=('upcall-stats.txt.xz',), name='upcall-stats')
     upcall_stats_process.start()
 
+    dpctl_dump_process = Process(target=dpctl_dump_datapath, args=('dpctl-dump-datapath.txt.xz',), name='dpctl-dump-datapath')
+    dpctl_dump_process.start()
+
     # Always join last
     conntrack_process.join()
     mem_show_process.join()
     port_counters_process.join()
     dpctl_stats_process.join()
     upcall_stats_process.join()
+    dpctl_dump_process.join()
 
 
 if __name__ == '__main__':
