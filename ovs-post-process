@@ -267,22 +267,21 @@ def ofctl_port_counters(filename: str):
 
     finish_samples()
 
-
 def dpctl_datapath_stats(filename: str):
     print("ovs-post-process-dpctl-datapath-stats")
     dp_names = []
-    lookups_desc_count = {'source': 'ovs-dpctl', 'type': 'show-stats-lookups-count', 'class': 'count'}
-    masks_desc_count = {'source': 'ovs-dpctl', 'type': 'show-stats-masks-count', 'class': 'count'}
-    cache_desc_count = {'source': 'ovs-dpctl', 'type': 'show-stats-cache-count', 'class': 'count'}
-    flow_desc_count = {'source': 'ovs-dpctl', 'type': 'show-stats-flows-count', 'class': 'count'}
-    lookups_desc_rate = {'source': 'ovs-dpctl', 'type': 'show-stats-lookups-rate', 'class': 'count'}
-    masks_desc_rate = {'source': 'ovs-dpctl', 'type': 'show-stats-masks-rate', 'class': 'count'}
-    cache_desc_rate = {'source': 'ovs-dpctl', 'type': 'show-stats-cache-rate', 'class': 'count'}
-    flow_desc_rate = {'source': 'ovs-dpctl', 'type': 'show-stats-flows-rate', 'class': 'count'}
+    lookups_desc_count = {'source': 'ovs-dpctl', 'type': 'lookups-count', 'class': 'count'}
+    masks_desc_count = {'source': 'ovs-dpctl', 'type': 'masks-count', 'class': 'count'}
+    cache_desc_count = {'source': 'ovs-dpctl', 'type': 'cache-count', 'class': 'count'}
+    flow_desc_count = {'source': 'ovs-dpctl', 'type': 'flows-count', 'class': 'count'}
+    lookups_desc_rate = {'source': 'ovs-dpctl', 'type': 'lookups-rate', 'class': 'count'}
+    masks_desc_rate = {'source': 'ovs-dpctl', 'type': 'masks-rate', 'class': 'count'}
+    cache_desc_rate = {'source': 'ovs-dpctl', 'type': 'cache-rate', 'class': 'count'}
+    flow_desc_rate = {'source': 'ovs-dpctl', 'type': 'flows-rate', 'class': 'count'}
     file_id = 'dpctl-datapath-stats'
     prev_stamp = 0
     curr_stamp = 0
-    time_delta = 0
+    time_delta = 0.0
     cache_hit_sample = {'end': 0, 'value': 0}
     prev_cache_hit = 0
     lookups_hit_sample = {'end': 0, 'value': 0}
@@ -472,6 +471,134 @@ def upcall_stats(filename: str):
 
     finish_samples()
 
+def extract_inside_parens(paren_str: str) -> str:
+    left = paren_str.find('(')
+    right = paren_str.find(')')
+    if left == -1 or right == -1:
+        return 'err'
+    # slice off left paren
+    left = left + 1
+    return paren_str[left:right]
+
+def dpctl_dump_datapath(filename: str):
+    print('ovs-post-process-dpctl-dump-ufid')
+    dpctl_dump_desc = {'source' : 'ovs-dpctl','class': 'count'}
+    curr_stamp = 0
+    prev_stamp = 0
+    expired_flow_count = 0
+    file_id = 'dpctl-dump-ufid'
+    new_flow_count = 0
+    time_delta = 0.0
+    ip_proto_lookup_table = {'0': 'NA', '1': 'ICMP',\
+        '2': 'IGMP', '6': 'IGMP', '17': 'UDP', '47': 'GRE'}
+
+    # lower case hex string for comparision
+    eth_type_lookup_table = {'0x0800': 'IPv4','0x86dd': 'IPv6',\
+        '0x8808': 'Ethernet Flow Control','0x88cc': 'LLDP','0x0806': 'ARP'}
+
+    ufids = {}
+
+    with lzma.open(filename,'rt') as file:
+        for line in file:
+            if 'DATE' in line:
+                # Time keeping
+                prev_stamp = curr_stamp
+                s = float(line.split(':')[1])
+                curr_stamp = int(s * 1000)
+                time_delta = curr_stamp - prev_stamp
+
+                # check expired flows
+                # flow freshnes is stamped with curr_stamp when a flow appears in the file
+                # if a flow is in the ufids dictionary and its stamp
+                # doesn't match the previous stamp then it probably matches
+                # the prev_prev stamp, so it didn't get updated and needs to be
+                # removed from the ufids dictionary
+                for ufid_key in list(ufids.keys()):
+                    if ufids[ufid_key]['freshness'] != prev_stamp:
+                        expired_flow_count += 1
+                        del(ufids[ufid_key])
+
+                # since we are using DATE to track new expired flows, a 0 for the time stamp is no good
+                if prev_stamp == 0:
+                    time_stamp = curr_stamp
+                else:
+                    time_stamp = prev_stamp
+
+                dpctl_dump_desc['type'] = 'ufid-new-flows'
+                log_sample(file_id, dpctl_dump_desc, {'counter': 'new-flows-count'},{'end':time_stamp,'value':new_flow_count})
+                new_flow_count = 0
+                dpctl_dump_desc['type'] = 'ufid-expired-flows'
+                log_sample(file_id, dpctl_dump_desc, {'counter': 'expired-flows-count'},{'end':time_stamp,'value':expired_flow_count})
+                expired_flow_count = 0
+
+            elif 'ufid:' in line:
+                line = line.split(',')
+                # set the ufid from the file as a key for the dict
+                ufid_key = line[0].split(':')[1]
+                # This is a new flow, use current stamp
+                if ufid_key not in ufids:
+                    ufids[ufid_key] = {}
+                    ufids[ufid_key]['freshness'] = curr_stamp
+                    ufids[ufid_key]['prev_packet_count'] = -1
+                    ufids[ufid_key]['prev_byte_count'] = -1
+                    new_flow_count += 1
+                else:
+                    # House Keeping on existing flows
+                    ufids[ufid_key]['freshness'] = curr_stamp
+                    ufids[ufid_key]['prev_packet_count'] = ufids[ufid_key]['curr_packet_count']
+                    ufids[ufid_key]['prev_byte_count'] = ufids[ufid_key]['curr_byte_count']
+
+                # list comprehensions - search through the array of values for
+                # metrics, returns an array, split that on the ':'
+                # then grab the value ['packets:2'] -> ['packets','2']
+                curr_packet = int([x for x in line if 'packets' in x][0].split(':')[1])
+                curr_byte = int([x for x in line if 'byte' in x][0].split(':')[1])
+                datapath = [x for x in line if 'dp:' in x][0].split(':')[1]
+                in_port = [x for x in line if 'in_port' in x][0]
+                eth_type = [x for x in line if 'eth_type' in x][0]
+                last_used = [x for x in line if 'used:' in x][0]
+                ufids[ufid_key]['curr_packet_count'] = curr_packet
+                ufids[ufid_key]['curr_byte_count'] = curr_byte
+                ufids[ufid_key]['datapath'] = datapath
+                ufids[ufid_key]['in_port'] = extract_inside_parens(in_port)
+                ufids[ufid_key]['eth_type'] = extract_inside_parens(eth_type).lower()
+
+                '''TODO - this section, we just need the basics right now
+                if eth_type == '0x0800'
+                    ipv4 = [x for x in line if 'ipv4' in x][0]
+                    # src=10.131.0.16/255.255.255.240,dst=192.168.111.24,proto=6,tos=0/0,ttl=64,frag=no
+                    ip4_match = extract_inside_parens(ipv4)
+                    ip4_csv = ip4_match.split(',')
+                    ip4_src = ipaddress.ip_network([x for x in ip4_csv if 'src=' in x][0].strip('src='))
+                    ip4_dst = ipaddress.ip_address([x for x in ip4_csv if 'dst=' in x][0].strip('dst='))
+                    ip4_proto_raw = [x for x in ip4_csv if 'proto=' in x][0].strip('proto=')
+                    ip4_proto = ip_proto_lookup_table[ip4_proto_raw]
+                if eth_type == '0x86dd':
+                    ipv6 = [x for x in line if 'ipv6' in x][0]
+                    ip6_match = extract_inside_parens(ipv6)
+                    ip6_csv = ip6_match.split(',')
+                ufid:41f86fcb-5a71-46a1-8a2c-b18ac103ffd9, recirc_id(0x953b99),dp_hash(0/0),skb_priority(0/0),in_port(0707684fc6fdb77),skb_mark(0/0),ct_state(0x2a/0x3f),ct_zone(0/0),ct_mark(0/0),ct_label(0/0x3),eth(src=0a:58:75:0c:67:b1,dst=0a:58:06:cc:5b:0e),eth_type(0x86dd),ipv6(src=fd01:0:0:1::/ffff:ffff:ffff:ffff::,dst=fd01:0:0:2::16,label=0/0,proto=6,tclass=0/0x3,hlimit=64,frag=no),tcp(src=0/0,dst=0/0),tcp_flags(0/0), packets:1, bytes:826, used:4.972s, flags:P., dp:ovs, actions:ct_clear,set(tunnel(tun_id=0x4,ipv6_dst=fc00:1000::6,ttl=64,tp_dst=6081,geneve({class=0x102,type=0x80,len=4,0x30005}),flags(df|csum|key))),set(eth(src=0a:58:7d:50:4d:fc,dst=0a:58:85:e2:e6:5d)),set(ipv6(hlimit=63)),genev_sys_6081
+                ufid:8acc72d6-b3cb-4051-93e3-4d1177a97a0d, recirc_id(0x953be4),dp_hash(0/0),skb_priority(0/0),in_port(6e769d62d8f9785),skb_mark(0/0),ct_state(0x2a/0x3f),ct_zone(0/0),ct_mark(0/0),ct_label(0/0x1),eth(src=00:00:00:00:00:00/00:00:00:00:00:00,dst=0a:58:05:b9:5e:9f),eth_type(0x86dd),ipv6(src=::/::,dst=fd01:0:0:1::25,label=0/0,proto=0/0,tclass=0/0,hlimit=0/0,frag=no), packets:4, bytes:6396, used:3.145s, flags:P., dp:ovs, actions:1b771892fabde8c
+                '''
+                # math on packets / bytes
+                packet_rate = (ufids[ufid_key]['curr_packet_count'] - ufids[ufid_key]['prev_packet_count']) / time_delta
+                bytes_to_Gbits = ((ufids[ufid_key]['curr_byte_count'] - ufids[ufid_key]['prev_byte_count']) * 8.0) / float(1_000_000_000)
+                bit_rate = bytes_to_Gbits / time_delta
+
+                # Since we only want to log samples with 2 data points check if the prev_counts are still unset
+                if ufids[ufid_key]['prev_packet_count'] == -1 and ufids[ufid_key]['prev_byte_count'] == -1:
+                    continue
+
+                # log samples
+                dpctl_dump_desc['type'] = 'ufid-packets-sec'
+                log_sample(file_id,dpctl_dump_desc,{'id':ufid_key},{'end': curr_stamp,'value':packet_rate})
+                dpctl_dump_desc['type'] = 'ufid-Gbps'
+                log_sample(file_id,dpctl_dump_desc,{'id':ufid_key},{'end': curr_stamp,'value':bit_rate})
+            else:
+                continue
+
+    finish_samples()
+
 def main():
     print("ovs-post-process-multiprocess-launcher")
     conntrack_process = Process(target=conntrack_post_process, args=('conntrack-stats-show.txt.xz',), name='conntrack')
@@ -489,12 +616,16 @@ def main():
     upcall_stats_process = Process(target=upcall_stats, args=('upcall-stats.txt.xz',), name='upcall-stats')
     upcall_stats_process.start()
 
+    dpctl_dump_process = Process(target=dpctl_dump_datapath, args=('dpctl-dump-datapath.txt.xz',), name='dpctl-dump-ufid')
+    dpctl_dump_process.start()
+
     # Always join last
     conntrack_process.join()
     mem_show_process.join()
     port_counters_process.join()
     dpctl_stats_process.join()
     upcall_stats_process.join()
+    dpctl_dump_process.join()
 
 
 if __name__ == '__main__':
