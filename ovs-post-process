@@ -270,14 +270,10 @@ def ofctl_port_counters(filename: str):
 def dpctl_datapath_stats(filename: str):
     print("ovs-post-process-dpctl-datapath-stats")
     dp_names = []
-    lookups_desc_count = {'source': 'ovs-dpctl', 'type': 'lookups-count', 'class': 'count'}
-    masks_desc_count = {'source': 'ovs-dpctl', 'type': 'masks-count', 'class': 'count'}
-    cache_desc_count = {'source': 'ovs-dpctl', 'type': 'cache-count', 'class': 'count'}
     flow_desc_count = {'source': 'ovs-dpctl', 'type': 'flows-count', 'class': 'count'}
     lookups_desc_rate = {'source': 'ovs-dpctl', 'type': 'lookups-rate', 'class': 'count'}
     masks_desc_rate = {'source': 'ovs-dpctl', 'type': 'masks-rate', 'class': 'count'}
     cache_desc_rate = {'source': 'ovs-dpctl', 'type': 'cache-rate', 'class': 'count'}
-    flow_desc_rate = {'source': 'ovs-dpctl', 'type': 'flows-rate', 'class': 'count'}
     file_id = 'dpctl-datapath-stats'
     prev_stamp = 0
     curr_stamp = 0
@@ -295,7 +291,6 @@ def dpctl_datapath_stats(filename: str):
     masks_total_sample = {'end': 0, 'value': 0}
     prev_masks_total = 0
     flows_sample = {'end': 0, 'value': 0}
-    prev_flows = 0
     with lzma.open(filename,'rt') as file:
         for line in file:
             if 'DATE' in line:
@@ -323,22 +318,14 @@ def dpctl_datapath_stats(filename: str):
                 curr_lookups_miss = int(pairs[2].split(':')[1])
                 curr_lookups_lost = int(pairs[3].split(':')[1])
 
-                # Log the count, then the rate, both could be useful
-
-                lookups_hit_sample['value'] = curr_lookups_hit
-                lookups_miss_sample['value'] = curr_lookups_miss
-                lookups_lost_sample['value'] = curr_lookups_lost
-
-                log_sample(file_id, lookups_desc_count, {'interface': dp_names[-1], 'action': 'hit'}, lookups_hit_sample)
-                log_sample(file_id, lookups_desc_count, {'interface': dp_names[-1], 'action': 'miss'}, lookups_miss_sample)
-                log_sample(file_id, lookups_desc_count, {'interface': dp_names[-1], 'action': 'lost'}, lookups_lost_sample)
-
                 lookups_hit_sample['value'] = (curr_lookups_hit - prev_lookups_hit) / time_delta
                 lookups_miss_sample['value'] = (curr_lookups_miss - prev_lookups_miss) / time_delta
                 lookups_lost_sample['value'] = (curr_lookups_lost - prev_lookups_lost) / time_delta
+
                 prev_lookups_hit = curr_lookups_hit
                 prev_lookups_miss = curr_lookups_miss
                 prev_lookups_lost = curr_lookups_lost
+
                 log_sample(file_id, lookups_desc_rate, {'interface': dp_names[-1], 'action': 'hit'}, lookups_hit_sample)
                 log_sample(file_id, lookups_desc_rate, {'interface': dp_names[-1], 'action': 'miss'}, lookups_miss_sample)
                 log_sample(file_id, lookups_desc_rate, {'interface': dp_names[-1], 'action': 'lost'}, lookups_lost_sample)
@@ -348,14 +335,10 @@ def dpctl_datapath_stats(filename: str):
                 pairs = line.split(':')
                 curr_flows = int(pairs[1])
 
-                # Log the count, then the rate, both could be useful
 
                 flows_sample['value'] = curr_flows
                 log_sample(file_id, flow_desc_count, {'interface': dp_names[-1], 'counter': 'flows'}, flows_sample)
 
-                flows_sample['value'] = (curr_flows - prev_flows) / time_delta
-                prev_flows = curr_flows
-                log_sample(file_id, flow_desc_rate, {'interface': dp_names[-1], 'counter': 'flows'}, flows_sample)
 
             elif 'masks:' in line:
                 #  masks: hit:512424506 total:64 hit/pkt:6.61
@@ -363,17 +346,12 @@ def dpctl_datapath_stats(filename: str):
                 curr_masks_hit = int(pairs[1].split(':')[1])
                 curr_masks_total = int(pairs[2].split(':')[1])
 
-                # Log the count, then the rate, both could be useful
-
-                masks_hit_sample['value'] = curr_masks_hit
-                masks_total_sample['value'] = curr_masks_total
-                log_sample(file_id, masks_desc_count, {'interface': dp_names[-1], 'action': 'hit'}, masks_hit_sample)
-                log_sample(file_id, masks_desc_count, {'interface': dp_names[-1], 'action': 'total'}, masks_total_sample)
-
                 masks_hit_sample['value'] = (curr_masks_hit - prev_masks_hit) / time_delta
                 masks_total_sample['value'] = (curr_masks_total - prev_masks_total) / time_delta
+
                 prev_masks_hit = curr_masks_hit
                 prev_masks_total = curr_masks_total
+
                 log_sample(file_id, masks_desc_rate, {'interface': dp_names[-1], 'action': 'hit'}, masks_hit_sample)
                 log_sample(file_id, masks_desc_rate, {'interface': dp_names[-1], 'action': 'total'}, masks_total_sample)
 
@@ -382,10 +360,6 @@ def dpctl_datapath_stats(filename: str):
                 #  cache: hit:46193519 hit-rate:59.61%
                 pairs = line[2:].split(' ')
                 curr_cache_hit = int(pairs[1].split(':')[1])
-                # Log the count, then the rate, both could be useful
-
-                cache_hit_sample['value'] = curr_cache_hit
-                log_sample(file_id, cache_desc_count, {'interface': dp_names[-1], 'action': 'hit'}, cache_hit_sample)
 
                 cache_hit_sample['value'] = (curr_cache_hit - prev_cache_hit) / time_delta
                 prev_cache_hit = curr_cache_hit
@@ -480,8 +454,8 @@ def extract_inside_parens(paren_str: str) -> str:
     left = left + 1
     return paren_str[left:right]
 
-def dpctl_dump_datapath(filename: str):
-    print('ovs-post-process-dpctl-dump-ufid')
+def dpctl_dump_flows(filename: str):
+    print('ovs-post-process-dpctl-dump-flows')
     dpctl_dump_desc = {'source' : 'ovs-dpctl','class': 'count'}
     curr_stamp = 0
     prev_stamp = 0
@@ -490,7 +464,7 @@ def dpctl_dump_datapath(filename: str):
     curr_new_flow = 0
     prev_new_flow = 0
     time_delta = 0.0
-    file_id = 'dpctl-dump-ufid'
+    file_id = 'dpctl-dump-flows'
     ip_proto_lookup_table = {'0': 'NA', '1': 'ICMP',\
         '2': 'IGMP', '6': 'IGMP', '17': 'UDP', '47': 'GRE'}
 
@@ -529,14 +503,14 @@ def dpctl_dump_datapath(filename: str):
                 else:
                     time_stamp = prev_stamp
 
-                dpctl_dump_desc['type'] = 'ufid-new-flows'
+                dpctl_dump_desc['type'] = 'ufid-new-flows-sec'
                 new_flow_rate = (curr_new_flow - prev_new_flow) / time_delta
-                log_sample(file_id, dpctl_dump_desc, {'counter': 'new-flows-count'},{'end':time_stamp,'value':new_flow_rate})
+                log_sample(file_id, dpctl_dump_desc, {'counter': 'new-flows-sec'},{'end':time_stamp,'value':new_flow_rate})
                 prev_new_flow = curr_new_flow
 
-                dpctl_dump_desc['type'] = 'ufid-expired-flows'
+                dpctl_dump_desc['type'] = 'ufid-expired-flows-sec'
                 expired_flow_rate = (curr_expired_flow - prev_expired_flow) / time_delta
-                log_sample(file_id, dpctl_dump_desc, {'counter': 'expired-flows-count'},{'end':time_stamp,'value':expired_flow_rate})
+                log_sample(file_id, dpctl_dump_desc, {'counter': 'expired-flows-sec'},{'end':time_stamp,'value':expired_flow_rate})
                 prev_expired_flow = curr_expired_flow
 
             elif 'ufid:' in line:
@@ -624,7 +598,7 @@ def main():
     upcall_stats_process = Process(target=upcall_stats, args=('upcall-stats.txt.xz',), name='upcall-stats')
     upcall_stats_process.start()
 
-    dpctl_dump_process = Process(target=dpctl_dump_datapath, args=('dpctl-dump-datapath.txt.xz',), name='dpctl-dump-ufid')
+    dpctl_dump_process = Process(target=dpctl_dump_flows, args=('dpctl-dump-flows.txt.xz',), name='dpctl-dump-flows')
     dpctl_dump_process.start()
 
     # Always join last

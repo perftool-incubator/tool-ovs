@@ -38,7 +38,7 @@ if [ -e $ovs_dir ]; then
     flows_file="ofctl-dump-flows.txt"
     coverage_file="dpctl-coverage-show.txt"
     memory_file="dpctl-memory-show.txt"
-    datapath_file="dpctl-dump-datapath.txt"
+    datapath_file="dpctl-dump-flows.txt"
     datapath_stats_file="dpctl-datapath-stats.txt"
     upcall_file="upcall-stats.txt"
 
