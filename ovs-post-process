@@ -503,14 +503,14 @@ def dpctl_dump_flows(filename: str):
                 else:
                     time_stamp = prev_stamp
 
-                dpctl_dump_desc['type'] = 'ufid-new-flows-rate'
+                dpctl_dump_desc['type'] = 'ufid-new-flows-sec'
                 new_flow_rate = (curr_new_flow - prev_new_flow) / time_delta
-                log_sample(file_id, dpctl_dump_desc, {'counter': 'new-flows-rate'},{'end':time_stamp,'value':new_flow_rate})
+                log_sample(file_id, dpctl_dump_desc, {'counter': 'new-flows-sec'},{'end':time_stamp,'value':new_flow_rate})
                 prev_new_flow = curr_new_flow
 
-                dpctl_dump_desc['type'] = 'ufid-expired-flows-rate'
+                dpctl_dump_desc['type'] = 'ufid-expired-flows-sec'
                 expired_flow_rate = (curr_expired_flow - prev_expired_flow) / time_delta
-                log_sample(file_id, dpctl_dump_desc, {'counter': 'expired-flows-rate'},{'end':time_stamp,'value':expired_flow_rate})
+                log_sample(file_id, dpctl_dump_desc, {'counter': 'expired-flows-sec'},{'end':time_stamp,'value':expired_flow_rate})
                 prev_expired_flow = curr_expired_flow
 
             elif 'ufid:' in line:
