@@ -595,22 +595,22 @@ def dpctl_dump_flows(filename: str):
 
 def main():
     print("ovs-post-process-multiprocess-launcher")
-    conntrack_process = Process(target=conntrack_post_process, args=('conntrack-stats-show.txt.xz',), name='conntrack')
+    conntrack_process = Process(target=conntrack_post_process, args=('appctl-dpctl-ct-stats-show.txt.xz',), name='conntrack')
     conntrack_process.start()
 
-    mem_show_process = Process(target=dpctl_memory_show_process, args=('dpctl-memory-show.txt.xz',), name='dpctl-show')
+    mem_show_process = Process(target=dpctl_memory_show_process, args=('appctl-memory-show.txt.xz',), name='dpctl-show')
     mem_show_process.start()
 
     port_counters_process = Process(target=ofctl_port_counters, args=('ofctl-dump-ports.txt.xz',), name='ofctl-dump-ports')
     port_counters_process.start()
 
-    dpctl_stats_process = Process(target=dpctl_datapath_stats, args=('dpctl-datapath-stats.txt.xz',), name='dpctl-dp-stats')
+    dpctl_stats_process = Process(target=dpctl_datapath_stats, args=('appctl-dpctl-show.txt.xz',), name='dpctl-dp-stats')
     dpctl_stats_process.start()
 
-    upcall_stats_process = Process(target=upcall_stats, args=('upcall-stats.txt.xz',), name='upcall-stats')
+    upcall_stats_process = Process(target=upcall_stats, args=('appctl-upcall-show.txt.xz',), name='upcall-stats')
     upcall_stats_process.start()
 
-    dpctl_dump_process = Process(target=dpctl_dump_flows, args=('dpctl-dump-flows.txt.xz',), name='dpctl-dump-flows')
+    dpctl_dump_process = Process(target=dpctl_dump_flows, args=('appctl-dpctl-dump-flows.txt.xz',), name='dpctl-dump-flows')
     dpctl_dump_process.start()
 
     # Always join last
@@ -620,7 +620,6 @@ def main():
     dpctl_stats_process.join()
     upcall_stats_process.join()
     dpctl_dump_process.join()
-
 
 if __name__ == '__main__':
     exit(main())
