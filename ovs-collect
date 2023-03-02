@@ -6,88 +6,63 @@ interval=$1; shift
 ovs_dir="/var/run/openvswitch"
 vswitchd_pid=$(pgrep ovs-vswitchd)
 re='^[1-9][0-9]*$'
+
 if [[ ! "$interval" =~ $re ]]; then
     echo "Interval must a be a positive interger, exiting"
     exit 1
 fi
 
-if [ -e $ovs_dir ]; then
-    declare -A cmd_opts
-    cmd_opts["ovs-vsctl"]="show"
-    cmd_opts["ovs-ofctl"]="show"
-
-    for cmd in ${!cmd_opts[@]}; do
-        echo "cmd: $cmd"
-        ver=$($cmd --version)
-        rc=$?
-        if [ $rc -gt 0 ]; then
-            echo "Could not run $cmd"
-            exit 1
-        fi
-    done
-
-    bridges=$(ovs-vsctl --db=unix:"$ovs_dir"/db.sock list-br)
-    echo "bridges: $bridges"
-    echo
-    echo "$ovs_dir:"
-    /bin/ls -l "$ovs_dir"
-    echo
-
-    ports_file="ofctl-dump-ports.txt"
-    conntrack_file="conntrack-stats-show.txt"
-    flows_file="ofctl-dump-flows.txt"
-    coverage_file="dpctl-coverage-show.txt"
-    memory_file="dpctl-memory-show.txt"
-    datapath_file="dpctl-dump-flows.txt"
-    datapath_stats_file="dpctl-datapath-stats.txt"
-    upcall_file="upcall-stats.txt"
-
-    while true; do
-        for bridge in $bridges; do
-            this_date="DATE:$(date +%s.%N)"
-            echo >>$ports_file
-            echo $this_date >>$ports_file
-            echo "[ovs-ofctl dump-ports $bridge]" >>$ports_file
-            ovs-ofctl -O OpenFlow15 --names dump-ports unix:"$ovs_dir"/$bridge.mgmt >>$ports_file
-            echo $this_date >> $flows_file
-            echo "[ovs-ofctl dump-flows $bridge]" >> $flows_file
-            ovs-ofctl -O OpenFlow15 dump-flows unix:"$ovs_dir"/$bridge.mgmt >> $flows_file
-        done
-
-        ## List flows by datapath
-        ## see https://www.openvswitch.org/support/dist-docs/ovs-vswitchd.8.html "DATAPATH FLOW TABLE DEBUGGING COMMANDS"
-        ## The overhead created by this query has not been characterized at this time.
-        this_date="DATE:$(date +%s.%N)"
-        echo $this_date >> $datapath_file
-        ovs-appctl --target "$ovs_dir"/ovs-vswitchd.$vswitchd_pid.ctl  dpctl/dump-flows --more --names >> $datapath_file
-
-        ## Conntrack entries
-        this_date="DATE:$(date +%s.%N)"
-        echo $this_date >> $conntrack_file
-        ovs-appctl --target "$ovs_dir"/ovs-vswitchd.$vswitchd_pid.ctl dpctl/ct-stats-show >> $conntrack_file
-
-        ## Datapath Stats
-        this_date="DATE:$(date +%s.%N)"
-        echo $this_date >> $datapath_stats_file
-        ovs-appctl --target "$ovs_dir"/ovs-vswitchd.$vswitchd_pid.ctl dpctl/show --statistics >> $datapath_stats_file
-
-        ## Coverage entries
-        this_date="DATE:$(date +%s.%N)"
-        echo $this_date >> $coverage_file
-        ovs-appctl --target "$ovs_dir"/ovs-vswitchd.$vswitchd_pid.ctl coverage/show >> $coverage_file
-
-        ## memory entries
-        this_date="DATE:$(date +%s.%N)"
-        echo $this_date >> $memory_file
-        ovs-appctl --target "$ovs_dir"/ovs-vswitchd.$vswitchd_pid.ctl memory/show >> $memory_file
-
-        ## upcall entries
-        this_date="DATE:$(date +%s.%N)"
-        echo $this_date >> $upcall_file
-        ovs-appctl --target "$ovs_dir"/ovs-vswitchd.$vswitchd_pid.ctl upcall/show >> $upcall_file
-
-        sleep $interval
-    done
-else
+if [ ! -e $ovs_dir ]; then
     echo "ERROR: could not find $ovs_dir"
+    exit 1
 fi
+
+declare -A cmd_opts
+cmd_opts["ovs-vsctl"]="show"
+cmd_opts["ovs-ofctl"]="show"
+
+for cmd in ${!cmd_opts[@]}; do
+    echo "cmd: $cmd"
+    ver=$($cmd --version)
+    rc=$?
+    if [ $rc -gt 0 ]; then
+        echo "Could not run $cmd"
+        exit 1
+    fi
+done
+
+bridges=$(ovs-vsctl --db=unix:"$ovs_dir"/db.sock list-br)
+echo "bridges: $bridges"
+echo
+echo "$ovs_dir:"
+/bin/ls -l "$ovs_dir"
+echo
+
+ofctl_cmds=("dump-ports --names" "dump-flows")
+appctl_cmds=("dpctl/dump-flows --more --names" "dpctl/ct-stats-show" "dpctl/show --statistics"\
+             "coverage/show" "memory/show" "upcall/show" "dpif-netdev/pmd-perf-show")
+target="--target "$ovs_dir"/ovs-vswitchd.$vswitchd_pid.ctl"
+
+while true; do
+    for bridge in $bridges; do
+        for ofctl_cmd in "${ofctl_cmds[@]}"; do
+            ofctl_file=ofctl-`echo $ofctl_cmd | awk '{print $1}' | sed -e sX/X-X`.txt
+            echo >>$ofctl_file
+            echo "DATE:$(date +%s.%N)" >>$ofctl_file
+            echo "[ovs-ofctl $ofctl_cmd $bridge]" >>$ofctl_file
+            ovs-ofctl -O OpenFlow15 $ofctl_cmd unix:"$ovs_dir"/$bridge.mgmt >>$ofctl_file
+        done
+    done
+
+    ## List flows by datapath
+    ## see https://www.openvswitch.org/support/dist-docs/ovs-vswitchd.8.html "DATAPATH FLOW TABLE DEBUGGING COMMANDS"
+    ## The overhead created by this query has not been characterized at this time.
+    for appctl_cmd in "${appctl_cmds[@]}"; do
+        appctl_file=appctl-`echo $appctl_cmd | awk '{print $1}' | sed -e sX/X-X`.txt
+        echo >>$appctl_file
+        echo "DATE:$(date +%s.%N)" >>$appctl_file
+        echo ovs-appctl $target $appctl_cmd '>>'$appctl_file
+        ovs-appctl $target $appctl_cmd >>$appctl_file
+    done
+    sleep $interval
+done
