@@ -5,6 +5,9 @@
 import sys
 import os
 import lzma
+import re
+import json
+import copy
 from pathlib import Path
 from multiprocessing import Process
 TOOLBOX_HOME = os.environ.get('TOOLBOX_HOME')
@@ -192,6 +195,72 @@ def compute_and_log_stats(br_name: str, new_br_data: dict, old_br_data: dict):
                 # if a port appears, it will be in the new data and not the old
                 # catch the key error, will only happen once per port appearance
                 pass
+
+def appctl_dpif_netdev_pmd_perf_show(filename: str):
+    print('ovs-post-process-appctl-dpif-netdev-pmd-perf-show')
+    file_id = 'ovs-pmd'
+
+    with lzma.open(filename,'rt') as file:
+        date, sample_set, prev_sample_set, epoch_ms, prev_epoch_ms = None, None, None, None, None
+        # The keys of the nested dictionary match the lines in the file we are parsing
+        subsections = { 'iterations': { '  - idle iterations:': 'idle', '  - busy iterations:': 'busy' },
+                        'packets': { '  Rx packets:': 'rx', '  Tx packets:': 'tx' },
+                        'batches': { '  Tx batches:': 'tx_batches' },
+                        'datapaths': { '  Datapath passes:': 'passes', '  - EMC hits:': 'emc',
+                                        '  - SMC hits:': 'smc', '  - Megaflow hits:': 'mega',
+                                        '  - Upcalls:': 'upcall', '  - Lost upcalls:': 'lost_upcall' } }
+
+        for line in file:
+            #DATE:1677729845.091742739
+            match = re.search(r'^DATE:(\d+.\d+)', line)
+            if match:
+                if epoch_ms:
+                    prev_epoch_ms = epoch_ms
+                epoch_ms = int(1000 * float(match.group(1)))
+                pmd = None
+                core = None
+                if sample_set:
+                    prev_sample_set = copy.deepcopy(sample_set)
+                    print("prev_sample_set:")
+                    print(json.dumps(prev_sample_set, indent=2))
+                sample_set = { 'epoch_ms': epoch_ms, 'pmds': {} }
+                continue
+            if epoch_ms:
+                # pmd thread numa_id 0 core_id 4:\n
+                match = re.search(r'^pmd thread numa_id (\d+) core_id (\d+):', line)
+                if match:
+                    node, core = int(match.group(1)), int(match.group(2))
+                    pmd = str(node) + '-' + str(core)
+                    sample_set['pmds'][pmd] = { 'core': core, 'node': node }
+                    for i in subsections.keys():
+                        sample_set['pmds'][pmd][i] = {}
+                    continue
+
+                if pmd:
+                    for subsection in subsections.keys():
+                        for field in subsections[subsection].keys():
+                            match = re.search(r'^' + field + '\s+(\d+)\.*', line)
+                            if match:
+                                sample_set['pmds'][pmd][subsection][subsections[subsection][field]] = int(match.group(1))
+                                if prev_sample_set:
+                                    val_diff = sample_set['pmds'][pmd][subsection][subsections[subsection][field]] - prev_sample_set['pmds'][pmd][subsection][subsections[subsection][field]]
+                                    epoch_ms_diff = epoch_ms - prev_epoch_ms
+                                    tput_sec = 1000 * val_diff / epoch_ms_diff
+                                    log_desc = {}
+                                    log_desc['type'] = subsection + '-sec'
+                                    log_desc['source'] = 'ovs-pmd'
+                                    log_desc['class'] = 'throughput'
+                                    log_names = { 'id': str(pmd), 'node': str(node), 'core': str(core) }
+                                    sample = { 'end': epoch_ms, 'value': float(tput_sec) }
+                                    if subsection == 'packets':
+                                        log_names['direction'] = subsections[subsection][field]
+                                        log_sample(file_id, log_desc, log_names, sample)
+                                    if subsection == 'iterations':
+                                        log_names['type'] = subsections[subsection][field]
+                                        log_sample(file_id, log_desc, log_names, sample)
+
+    finish_samples()
+
 
 
 def ofctl_port_counters(filename: str):
@@ -601,6 +670,9 @@ def main():
     mem_show_process = Process(target=dpctl_memory_show_process, args=('appctl-memory-show.txt.xz',), name='dpctl-show')
     mem_show_process.start()
 
+    pmd_counters_process = Process(target=appctl_dpif_netdev_pmd_perf_show, args=('appctl-dpif-netdev-pmd-perf-show.txt.xz',), name='appctl-dpif-netdev-pmd-perf-show')
+    pmd_counters_process.start()
+
     port_counters_process = Process(target=ofctl_port_counters, args=('ofctl-dump-ports.txt.xz',), name='ofctl-dump-ports')
     port_counters_process.start()
 
@@ -620,6 +692,7 @@ def main():
     dpctl_stats_process.join()
     upcall_stats_process.join()
     dpctl_dump_process.join()
+    pmd_counters_process.join()
 
 if __name__ == '__main__':
     exit(main())
