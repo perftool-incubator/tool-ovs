@@ -6,7 +6,6 @@ import sys
 import os
 import lzma
 import re
-import json
 import copy
 from pathlib import Path
 from multiprocessing import Process
@@ -221,8 +220,6 @@ def appctl_dpif_netdev_pmd_perf_show(filename: str):
                 core = None
                 if sample_set:
                     prev_sample_set = copy.deepcopy(sample_set)
-                    print("prev_sample_set:")
-                    print(json.dumps(prev_sample_set, indent=2))
                 sample_set = { 'epoch_ms': epoch_ms, 'pmds': {} }
                 continue
             if epoch_ms:
@@ -239,13 +236,15 @@ def appctl_dpif_netdev_pmd_perf_show(filename: str):
                 if pmd:
                     for subsection in subsections.keys():
                         for field in subsections[subsection].keys():
-                            match = re.search(r'^' + field + '\s+(\d+)\.*', line)
+                            match = re.search(r'^' + field + '\s+(\d+)\s*(\(.*\))', line)
                             if match:
+                                print(match.group(1))
+                                print(match.group(2))
                                 sample_set['pmds'][pmd][subsection][subsections[subsection][field]] = int(match.group(1))
                                 if prev_sample_set:
                                     val_diff = sample_set['pmds'][pmd][subsection][subsections[subsection][field]] - prev_sample_set['pmds'][pmd][subsection][subsections[subsection][field]]
                                     epoch_ms_diff = epoch_ms - prev_epoch_ms
-                                    tput_sec = 1000 * val_diff / epoch_ms_diff
+                                    tput_sec = 1000 * (val_diff / epoch_ms_diff)
                                     log_desc = {}
                                     log_desc['type'] = subsection + '-sec'
                                     log_desc['source'] = 'ovs-pmd'
