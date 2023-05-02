@@ -54,9 +54,10 @@ while true; do
         done
     done
 
-    ## List flows by datapath
     ## see https://www.openvswitch.org/support/dist-docs/ovs-vswitchd.8.html "DATAPATH FLOW TABLE DEBUGGING COMMANDS"
-    ## The overhead created by this query has not been characterized at this time.
+
+    ovs-appctl dpif-netdev/pmd-stats-clear 2>&1 >> pmd-stats-clear.stdouterr.txt
+    sleep $interval
     for appctl_cmd in "${appctl_cmds[@]}"; do
         appctl_file=appctl-`echo $appctl_cmd | awk '{print $1}' | sed -e sX/X-X`.txt
         echo >>$appctl_file
@@ -64,5 +65,4 @@ while true; do
         echo ovs-appctl $target $appctl_cmd '>>'$appctl_file
         ovs-appctl $target $appctl_cmd >>$appctl_file
     done
-    sleep $interval
 done
