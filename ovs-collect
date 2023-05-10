@@ -56,7 +56,7 @@ while true; do
 
     ## see https://www.openvswitch.org/support/dist-docs/ovs-vswitchd.8.html "DATAPATH FLOW TABLE DEBUGGING COMMANDS"
 
-    ovs-appctl dpif-netdev/pmd-stats-clear 2>&1 >> pmd-stats-clear.stdouterr.txt
+    ovs-appctl $target dpif-netdev/pmd-stats-clear 2>&1 >> pmd-stats-clear.stdouterr.txt
     sleep $interval
     for appctl_cmd in "${appctl_cmds[@]}"; do
         appctl_file=appctl-`echo $appctl_cmd | awk '{print $1}' | sed -e sX/X-X`.txt
