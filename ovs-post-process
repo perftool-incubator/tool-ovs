@@ -226,55 +226,93 @@ def appctl_dpif_netdev_pmd_perf_show(filename: str):
                 # pmd thread numa_id 0 core_id 4:\n
                 match = re.search(r'^pmd thread numa_id (\d+) core_id (\d+):', line)
                 if match:
+                    #print('found match for pmd thread numa_id ' + match.group(1)  + ' core_id ' + match.group(2))
                     node, core = int(match.group(1)), int(match.group(2))
                     pmd = str(node) + '-' + str(core)
                     sample_set['pmds'][pmd] = { 'core': core, 'node': node }
-                    for i in subsections.keys():
-                        sample_set['pmds'][pmd][i] = {}
+                    for subsection in subsections.keys():
+                        sample_set['pmds'][pmd][subsection] = {}
                     continue
 
                 if pmd:
                     for subsection in subsections.keys():
                         for field in subsections[subsection].keys():
+                            key = subsections[subsection][field]
+                            #print('field: [' + field + ']')
                             # match group 1 is values before parens
                             # match group 2 is values inside (including) parens
-                            match = re.search(r'^' + field + '\s+(\d+)\s*(\(.*\))', line)
+                            #[  - idle iterations:      53661603  (100.0 % of used cycles)]
+                            match = re.search(r'^' + field + '\s+(\d+)\s*\((.*\))', line)
                             if match:
-                                print(match.group(1))
-                                print(match.group(2))
-                                sample_set['pmds'][pmd][subsection][subsections[subsection][field]] = int(match.group(1))
-                                if prev_sample_set:
-                                    val_diff = sample_set['pmds'][pmd][subsection][subsections[subsection][field]] - prev_sample_set['pmds'][pmd][subsection][subsections[subsection][field]]
+                                val = int(match.group(1))
+
+                                # PMD busy metric needs percent, not num_iterations.  Number of iterations is pretty useless because
+                                # cpu-time for busy iteration != cpu-time for idle iteration.
+                                # Would be better if busy and idle were reported in cpu cycles.
+                                if (field == '  - idle iterations:' or field == '  - busy iterations:'):
+                                    match2 = re.search(r'^' + field + '\s+\d+\s*\(\s*(\d+).*\)', line)
+                                    if match2:
+                                        val = match2.group(1)
+                                    else:
+                                        print('no match on ' + line)
+
+                                sample_set['pmds'][pmd][subsection][key] = val
+
+                                # progressive check for prev_sample_set['pmds'][pmd][subsection]
+                                if not prev_sample_set:
+                                    print('prev_sample_set does not exist, skpping diff.  pmd: [' + pmd + '] key: [' + key + ']')
+                                    continue
+                                if not prev_sample_set['pmds']:
+                                    print('prev_sample_set[pmds] does not exist, skpping diff.  key: [' + key + ']')
+                                    print('prev_sample_set:')
+                                    print(prev_sample_set)
+                                    continue
+                                if not prev_sample_set['pmds'][pmd]:
+                                    print('prev_sample_set[pmds][' + pmd + '] does not exist, skpping diff')
+                                    print('prev_sample_set[pmds]:')
+                                    print(prev_sample_set['pmds'])
+                                    continue
+                                if not prev_sample_set['pmds'][pmd][subsection]:
+                                    print('prev_sample_set[pmds][' + pmd + '][' + subsection + '] does not exist, skpping diff')
+                                    print('prev_sample_set[pmds][' + pmd + ']:')
+                                    print(prev_sample_set['pmds'][pmd])
+                                    continue
+                                if not key in prev_sample_set['pmds'][pmd][subsection]:
+                                    print('prev_sample_set[pmds][' + pmd + '][' + subsection + '][' + key + '] does not exist, skpping diff')
+                                    print('prev_sample_set[pmds][' + pmd + '][' + subsection + ']:')
+                                    print(prev_sample_set['pmds'][pmd][subsection])
+                                    continue
+
+                                if (field == '  - idle iterations:' or field == '  - busy iterations:'):
+                                    # precent idle/busy is already a throughput metric, no need for val_diff/time_diff
+                                    tput_sec = float(sample_set['pmds'][pmd][subsection][key] / 100.00)
+                                    print('assigning tput val of [' + tput_sec + '] for pmd: [' + pmd + '] subsection: [' + subsection + '] + key: [' + key +']')
+                                else:
+                                    print('calculating diff for pmd: [' + pmd + '] subsection: [' + subsection + '] + key: [' + key +']')
+                                    val_diff = sample_set['pmds'][pmd][subsection][key] - prev_sample_set['pmds'][pmd][subsection][key]
                                     epoch_ms_diff = epoch_ms - prev_epoch_ms
                                     tput_sec = 1000 * (val_diff / epoch_ms_diff)
-                                    log_desc = {}
-                                    log_desc['type'] = subsection + '-sec'
-                                    log_desc['source'] = 'ovs-pmd'
-                                    log_desc['class'] = 'throughput'
-                                    log_names = { 'id': str(pmd), 'node': str(node), 'core': str(core) }
-                                    sample = { 'end': epoch_ms, 'value': float(tput_sec) }
-                                    if subsection == 'packets':
-                                        log_names['direction'] = subsections[subsection][field]
-                                        log_sample(file_id, log_desc, log_names, sample)
+                                log_desc = {}
+                                log_desc['type'] = subsection + '-sec'
+                                log_desc['source'] = 'ovs-pmd'
+                                log_desc['class'] = 'throughput'
+                                log_names = { 'id': str(pmd), 'node': str(node), 'core': str(core) }
+                                sample = { 'end': epoch_ms, 'value': float(tput_sec) }
+                                if subsection == 'packets':
+                                    log_names['direction'] = subsections[subsection][field]
+                                    log_sample(file_id, log_desc, log_names, sample)
 
-                                        # '0 Kpps, 10006 cycles/pkt' strip the space before the number, then split on white space
-                                        fields = match.group(2).split(' ')
-                                        if len(fields) >=3:
-                                            cyc_pkt = fields[2]
+                                    # '0 Kpps, 10006 cycles/pkt' strip the space before the number, then split on white space
+                                    fields = match.group(2).split(' ')
+                                    if len(fields) >=3:
+                                        cyc_pkt = fields[2]
 
-                                        log_sample(file_id,{'type':'cycles-per-pkt','source':'ovs-pmd',\
-                                                'class':'count'},log_names,{'end':epoch_ms,'value': cyc_pkt})
+                                    log_sample(file_id,{'type':'cycles-per-pkt','source':'ovs-pmd',\
+                                            'class':'count'},log_names,{'end':epoch_ms,'value': cyc_pkt})
 
-                                    if subsection == 'iterations':
-                                        #busy-pmd-pct
-                                        busy_cyc_pct = float(match.group(2).split('%')[0][1:]) / 100.0
-                                        log_sample(file_id,{'type':'busy-pmd-pct','source':'ovs-pmd',\
-                                                'class':'count'},log_names,{'end':epoch_ms,'value':busy_cyc_pct})
-
-                                        #iterations
-                                        log_names['type'] = subsections[subsection][field]
-                                        log_sample(file_id, log_desc, log_names, sample)
-
+                                if subsection == 'iterations':
+                                    log_sample(file_id,{'type':'busy-pmd-pct','source':'ovs-pmd',\
+                                            'class':'count'},log_names,{'end':epoch_ms,'value':tput_sec})
 
     finish_samples()
 
