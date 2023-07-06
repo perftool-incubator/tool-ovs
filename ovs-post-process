@@ -404,10 +404,10 @@ def ofctl_port_counters(filename: str):
 def dpctl_datapath_stats(filename: str):
     print("ovs-post-process-dpctl-datapath-stats")
     dp_names = []
-    flow_desc_count = {'source': 'ovs-dpctl', 'type': 'flows-count', 'class': 'count'}
-    lookups_desc_rate = {'source': 'ovs-dpctl', 'type': 'lookups-sec', 'class': 'count'}
-    masks_desc_rate = {'source': 'ovs-dpctl', 'type': 'masks-sec', 'class': 'count'}
-    cache_desc_rate = {'source': 'ovs-dpctl', 'type': 'cache-sec', 'class': 'count'}
+    flow_desc_count = {'source': 'ovs-dpctl-show', 'type': 'flows-count', 'class': 'count'}
+    lookups_desc_rate = {'source': 'ovs-dpctl-show', 'type': 'lookups-sec', 'class': 'count'}
+    masks_desc_rate = {'source': 'ovs-dpctl-show', 'type': 'masks-sec', 'class': 'count'}
+    cache_desc_rate = {'source': 'ovs-dpctl-show', 'type': 'cache-sec', 'class': 'count'}
     file_id = 'dpctl-datapath-stats'
     prev_stamp = 0
     curr_stamp = 0
@@ -599,7 +599,7 @@ def extract_inside_parens(paren_str: str) -> str:
 
 def dpctl_dump_flows(filename: str):
     print('ovs-post-process-dpctl-dump-flows')
-    dpctl_dump_desc = {'source' : 'ovs-dpctl','class': 'count'}
+    dpctl_dump_desc = {'source' : 'ovs-dpctl-dump-flows','class': 'count'}
     curr_stamp = 0
     prev_stamp = 0
     curr_expired_flow = 0
