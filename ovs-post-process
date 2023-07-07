@@ -610,6 +610,8 @@ def dpctl_dump_flows(filename: str):
     time_delta_sec = 0
     file_id = 'dpctl-dump-flows'
     datapath_histo = Counter()
+    offload_histo = Counter()
+
     ip_proto_lookup_table = {'0': 'NA', '1': 'ICMP',\
         '2': 'IGMP', '6': 'IGMP', '17': 'UDP', '47': 'GRE'}
 
@@ -667,6 +669,13 @@ def dpctl_dump_flows(filename: str):
 
                 datapath_histo.clear()
 
+                if offload_histo.total() > 0:
+                    dpctl_dump_desc['type'] = 'flow-offloaded'
+                    for offload in offload_histo:
+                        log_sample(file_id,dpctl_dump_desc,{'id':offload},{'end': end_stamp_ms, 'value':offload_histo[path]})
+
+                offload_histo.clear()
+
             elif 'ufid:' in line:
                 line = line.split(',')
                 # set the ufid from the file as a key for the dict
@@ -690,6 +699,7 @@ def dpctl_dump_flows(filename: str):
                 curr_packet = int([x for x in line if 'packets' in x][0].split(':')[1])
                 curr_byte = int([x for x in line if 'byte' in x][0].split(':')[1])
                 datapath = [x for x in line if 'dp:' in x][0].split(':')[1]
+                offload = [x for x in line if 'offloaded:' in x][0].split(':')[1]
                 in_port = [x for x in line if 'in_port' in x][0]
                 eth_type = [x for x in line if 'eth_type' in x][0]
                 last_used = [x for x in line if 'used:' in x][0]
@@ -699,6 +709,7 @@ def dpctl_dump_flows(filename: str):
                 ufids[ufid_key]['in_port'] = extract_inside_parens(in_port)
                 ufids[ufid_key]['eth_type'] = extract_inside_parens(eth_type).lower()
                 datapath_histo.update([datapath])
+                offload_histo.update([offload])
 
                 '''TODO - this section, we just need the basics right now
                 if eth_type == '0x0800'
