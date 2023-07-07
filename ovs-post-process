@@ -7,6 +7,7 @@ import os
 import lzma
 import re
 import copy
+from collections import Counter
 from pathlib import Path
 from multiprocessing import Process
 TOOLBOX_HOME = os.environ.get('TOOLBOX_HOME')
@@ -608,6 +609,7 @@ def dpctl_dump_flows(filename: str):
     prev_new_flow = 0
     time_delta_sec = 0
     file_id = 'dpctl-dump-flows'
+    datapath_histo = Counter()
     ip_proto_lookup_table = {'0': 'NA', '1': 'ICMP',\
         '2': 'IGMP', '6': 'IGMP', '17': 'UDP', '47': 'GRE'}
 
@@ -657,6 +659,14 @@ def dpctl_dump_flows(filename: str):
                 log_sample(file_id, dpctl_dump_desc, {'counter': 'expired-flows-sec'},{'end':end_stamp_ms,'value':expired_flow_rate})
                 prev_expired_flow = curr_expired_flow
 
+                # log then clear the counter of datapaths we don't want the running total
+                if datapath_histo.total() > 0:
+                    dpctl_dump_desc['type'] = 'flow-datapath'
+                    for path in datapath_histo:
+                        log_sample(file_id,dpctl_dump_desc,{'id':path},{'end': end_stamp_ms, 'value':datapath_histo[path]})
+
+                datapath_histo.clear()
+
             elif 'ufid:' in line:
                 line = line.split(',')
                 # set the ufid from the file as a key for the dict
@@ -688,6 +698,7 @@ def dpctl_dump_flows(filename: str):
                 ufids[ufid_key]['datapath'] = datapath
                 ufids[ufid_key]['in_port'] = extract_inside_parens(in_port)
                 ufids[ufid_key]['eth_type'] = extract_inside_parens(eth_type).lower()
+                datapath_histo.update([datapath])
 
                 '''TODO - this section, we just need the basics right now
                 if eth_type == '0x0800'
@@ -720,6 +731,7 @@ def dpctl_dump_flows(filename: str):
                 log_sample(file_id,dpctl_dump_desc,{'id':ufid_key},{'end': end_stamp_ms,'value':packet_rate})
                 dpctl_dump_desc['type'] = 'ufid-Gbps'
                 log_sample(file_id,dpctl_dump_desc,{'id':ufid_key},{'end': end_stamp_ms,'value':bit_rate})
+
             else:
                 continue
 
