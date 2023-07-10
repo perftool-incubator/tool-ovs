@@ -46,7 +46,7 @@ def conntrack_post_process(filename: str):
                 # This is from date +%s.%N to nanosecond precision
                 # DATE:1620741229.909499801
                 time_stamp_float = float(line.split(':')[1])
-                end_stamp_ms = int(time_stamp_float * 1000)
+                end_stamp_ms = time_stamp_float * 1000
                 tcp_sample['end'] = end_stamp_ms
                 udp_sample['end'] = end_stamp_ms
                 icmp_sample['end'] = end_stamp_ms
@@ -94,7 +94,7 @@ def dpctl_memory_show_process(filename: str):
             if 'DATE' in line:
                 # Parses output of date +%s.%N
                 time_stamp_float = float(line.split(':')[1])
-                end_stamp_ms = int(time_stamp_float * 1000)
+                end_stamp_ms = (time_stamp_float * 1000)
                 handler_smpl['end'] = end_stamp_ms
                 ofconns_smpl['end'] = end_stamp_ms
                 ports_smpl['end'] = end_stamp_ms
@@ -435,7 +435,7 @@ def dpctl_datapath_stats(filename: str):
                 # in microseconds 1668029405.978062
                 prev_stamp = curr_stamp
                 stamp = float(line.split(':')[1])
-                end_stamp_ms = int(stamp * 1000)
+                end_stamp_ms = (stamp * 1000)
 
                 # Chop off floating precision so rate calculations are done in seconds
                 curr_stamp = int(stamp)
@@ -539,7 +539,7 @@ def upcall_stats(filename: str):
             if 'DATE' in line:
                 # Parses  output of date +%s.%N
                 s = float(line.split(':')[1])
-                end_stamp_ms = int(s * 1000)
+                end_stamp_ms = s * 1000
                 flow_sample['end'] = end_stamp_ms
                 avg_sample['end'] = end_stamp_ms
                 max_sample['end'] = end_stamp_ms
@@ -627,7 +627,7 @@ def dpctl_dump_flows(filename: str):
                 # Time keeping
                 prev_stamp = curr_stamp
                 s = float(line.split(':')[1])
-                end_stamp_ms = int(s * 1000)
+                end_stamp_ms = (s * 1000)
                 curr_stamp = int(s)
                 time_delta_sec = curr_stamp - prev_stamp
 
