@@ -15,18 +15,19 @@
             "name": "ovs_src",
             "type": "source",
             "source_info": {
-                "url": "https://github.com/openvswitch/ovs/archive/v2.13.0.tar.gz",
-                "filename": "v2.13.0.tar.gz",
+                "url": "https://www.openvswitch.org/releases/openvswitch-3.3.0.tar.gz",
+                "filename": "ovs.tar.gz",
                 "commands": {
-                    "unpack": "tar -zxf v2.13.0.tar.gz",
-                    "get_dir": "tar -ztf v2.13.0.tar.gz | head -n 1",
+                    "unpack": "tar xf ovs.tar.gz",
+                    "get_dir": "tar tf ovs.tar.gz | head -n 1",
                     "commands": [
                         "./boot.sh",
                         "./configure",
                         "make -j16",
                         "make install-binPROGRAMS",
                         "ldconfig",
-                        "make clean"
+                        "make clean",
+                        "rm -rf *"
                     ]
                 }
             }
