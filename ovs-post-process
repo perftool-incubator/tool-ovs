@@ -7,6 +7,7 @@ import os
 import lzma
 import re
 import copy
+from collections import Counter
 from pathlib import Path
 from multiprocessing import Process
 TOOLBOX_HOME = os.environ.get('TOOLBOX_HOME')
@@ -45,7 +46,7 @@ def conntrack_post_process(filename: str):
                 # This is from date +%s.%N to nanosecond precision
                 # DATE:1620741229.909499801
                 time_stamp_float = float(line.split(':')[1])
-                end_stamp_ms = int(time_stamp_float * 1000)
+                end_stamp_ms = time_stamp_float * 1000
                 tcp_sample['end'] = end_stamp_ms
                 udp_sample['end'] = end_stamp_ms
                 icmp_sample['end'] = end_stamp_ms
@@ -93,7 +94,7 @@ def dpctl_memory_show_process(filename: str):
             if 'DATE' in line:
                 # Parses output of date +%s.%N
                 time_stamp_float = float(line.split(':')[1])
-                end_stamp_ms = int(time_stamp_float * 1000)
+                end_stamp_ms = (time_stamp_float * 1000)
                 handler_smpl['end'] = end_stamp_ms
                 ofconns_smpl['end'] = end_stamp_ms
                 ports_smpl['end'] = end_stamp_ms
@@ -404,10 +405,10 @@ def ofctl_port_counters(filename: str):
 def dpctl_datapath_stats(filename: str):
     print("ovs-post-process-dpctl-datapath-stats")
     dp_names = []
-    flow_desc_count = {'source': 'ovs-dpctl', 'type': 'flows-count', 'class': 'count'}
-    lookups_desc_rate = {'source': 'ovs-dpctl', 'type': 'lookups-sec', 'class': 'count'}
-    masks_desc_rate = {'source': 'ovs-dpctl', 'type': 'masks-sec', 'class': 'count'}
-    cache_desc_rate = {'source': 'ovs-dpctl', 'type': 'cache-sec', 'class': 'count'}
+    flow_desc_count = {'source': 'ovs-dpctl-show', 'type': 'flows-count', 'class': 'count'}
+    lookups_desc_rate = {'source': 'ovs-dpctl-show', 'type': 'lookups-sec', 'class': 'count'}
+    masks_desc_rate = {'source': 'ovs-dpctl-show', 'type': 'masks-sec', 'class': 'count'}
+    cache_desc_rate = {'source': 'ovs-dpctl-show', 'type': 'cache-sec', 'class': 'count'}
     file_id = 'dpctl-datapath-stats'
     prev_stamp = 0
     curr_stamp = 0
@@ -434,7 +435,7 @@ def dpctl_datapath_stats(filename: str):
                 # in microseconds 1668029405.978062
                 prev_stamp = curr_stamp
                 stamp = float(line.split(':')[1])
-                end_stamp_ms = int(stamp * 1000)
+                end_stamp_ms = (stamp * 1000)
 
                 # Chop off floating precision so rate calculations are done in seconds
                 curr_stamp = int(stamp)
@@ -538,7 +539,7 @@ def upcall_stats(filename: str):
             if 'DATE' in line:
                 # Parses  output of date +%s.%N
                 s = float(line.split(':')[1])
-                end_stamp_ms = int(s * 1000)
+                end_stamp_ms = s * 1000
                 flow_sample['end'] = end_stamp_ms
                 avg_sample['end'] = end_stamp_ms
                 max_sample['end'] = end_stamp_ms
@@ -599,7 +600,7 @@ def extract_inside_parens(paren_str: str) -> str:
 
 def dpctl_dump_flows(filename: str):
     print('ovs-post-process-dpctl-dump-flows')
-    dpctl_dump_desc = {'source' : 'ovs-dpctl','class': 'count'}
+    dpctl_dump_desc = {'source' : 'ovs-dpctl-dump-flows','class': 'count'}
     curr_stamp = 0
     prev_stamp = 0
     curr_expired_flow = 0
@@ -608,6 +609,9 @@ def dpctl_dump_flows(filename: str):
     prev_new_flow = 0
     time_delta_sec = 0
     file_id = 'dpctl-dump-flows'
+    datapath_histo = Counter()
+    offload_histo = Counter()
+
     ip_proto_lookup_table = {'0': 'NA', '1': 'ICMP',\
         '2': 'IGMP', '6': 'IGMP', '17': 'UDP', '47': 'GRE'}
 
@@ -623,7 +627,7 @@ def dpctl_dump_flows(filename: str):
                 # Time keeping
                 prev_stamp = curr_stamp
                 s = float(line.split(':')[1])
-                end_stamp_ms = int(s * 1000)
+                end_stamp_ms = (s * 1000)
                 curr_stamp = int(s)
                 time_delta_sec = curr_stamp - prev_stamp
 
@@ -657,6 +661,21 @@ def dpctl_dump_flows(filename: str):
                 log_sample(file_id, dpctl_dump_desc, {'counter': 'expired-flows-sec'},{'end':end_stamp_ms,'value':expired_flow_rate})
                 prev_expired_flow = curr_expired_flow
 
+                # log then clear the counter of datapaths we don't want the running total
+                if datapath_histo.total() > 0:
+                    dpctl_dump_desc['type'] = 'flow-datapath'
+                    for path in datapath_histo:
+                        log_sample(file_id,dpctl_dump_desc,{'id':path},{'end': end_stamp_ms, 'value':datapath_histo[path]})
+
+                datapath_histo.clear()
+
+                if offload_histo.total() > 0:
+                    dpctl_dump_desc['type'] = 'flow-offloaded'
+                    for offload in offload_histo:
+                        log_sample(file_id,dpctl_dump_desc,{'id':offload},{'end': end_stamp_ms, 'value':offload_histo[path]})
+
+                offload_histo.clear()
+
             elif 'ufid:' in line:
                 line = line.split(',')
                 # set the ufid from the file as a key for the dict
@@ -680,6 +699,12 @@ def dpctl_dump_flows(filename: str):
                 curr_packet = int([x for x in line if 'packets' in x][0].split(':')[1])
                 curr_byte = int([x for x in line if 'byte' in x][0].split(':')[1])
                 datapath = [x for x in line if 'dp:' in x][0].split(':')[1]
+                # offload is not always present in the output, gracefully code around its absence
+                offload = [x for x in line if 'offloaded:' in x]
+                if len(offload) > 0:
+                    offload = offload[0].split(':')[1]
+                    offload_histo.update([offload])
+
                 in_port = [x for x in line if 'in_port' in x][0]
                 eth_type = [x for x in line if 'eth_type' in x][0]
                 last_used = [x for x in line if 'used:' in x][0]
@@ -688,6 +713,7 @@ def dpctl_dump_flows(filename: str):
                 ufids[ufid_key]['datapath'] = datapath
                 ufids[ufid_key]['in_port'] = extract_inside_parens(in_port)
                 ufids[ufid_key]['eth_type'] = extract_inside_parens(eth_type).lower()
+                datapath_histo.update([datapath])
 
                 '''TODO - this section, we just need the basics right now
                 if eth_type == '0x0800'
@@ -720,6 +746,7 @@ def dpctl_dump_flows(filename: str):
                 log_sample(file_id,dpctl_dump_desc,{'id':ufid_key},{'end': end_stamp_ms,'value':packet_rate})
                 dpctl_dump_desc['type'] = 'ufid-Gbps'
                 log_sample(file_id,dpctl_dump_desc,{'id':ufid_key},{'end': end_stamp_ms,'value':bit_rate})
+
             else:
                 continue
 
