@@ -35,7 +35,7 @@
                 "collector-types": [ "compute" ]
             },
             {
-                "endpoint": "remotehost",
+                "endpoint": "remotehosts",
                 "collector-types": [ "profiler" ]
             },        
             {
