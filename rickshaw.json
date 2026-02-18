@@ -25,6 +25,10 @@
         ],
         "blacklist": [
             {
+                "endpoint": "osp",
+                "collector-types": [ "client", "server" ]
+            },
+            {
                 "endpoint": "remotehosts",
                 "collector-types": [ "client", "server" ]
             },
