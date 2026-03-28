@@ -48,7 +48,7 @@
             },
             {
                 "endpoint": "kube",
-                "collector-types": [ "master", "worker" ]
+                "collector-types": [ "profiler" ]
             }
         ],
         "start": "ovs-start",
