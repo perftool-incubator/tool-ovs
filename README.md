@@ -1,5 +1,5 @@
-# ovs
-Scripts to help collect and post-process Open vSwitch (OVS) and Open Virtual Network (OVN).
+# tool-ovs
+Collect and post-process Open vSwitch (OVS) and Open Virtual Network (OVN) data for the [crucible](https://github.com/perftool-incubator/crucible) performance testing framework.
 
 ## Scripts
 

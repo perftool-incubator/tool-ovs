@@ -33,10 +33,6 @@
                 "collector-types": [ "client", "server" ]
             },
             {
-                "endpoint": "k8s",
-                "collector-types": [ "client", "server" ]
-            },
-            {
                 "endpoint": "kube",
                 "collector-types": [ "client", "server" ]
             }
@@ -51,12 +47,8 @@
                 "collector-types": [ "profiler" ]
             },
             {
-                "endpoint": "k8s",
-                "collector-types": [ "master", "worker" ]
-            },
-            {
                 "endpoint": "kube",
-                "collector-types": [ "master", "worker" ]
+                "collector-types": [ "profiler" ]
             }
         ],
         "start": "ovs-start",
